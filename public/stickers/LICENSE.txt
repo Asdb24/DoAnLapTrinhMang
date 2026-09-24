@@ -1,0 +1,3 @@
+Little Orbs v1: original vector artwork created for ChatAi, 2026.
+Released under CC0 1.0 Universal. https://creativecommons.org/publicdomain/zero/1.0/
+Stable v1 asset names must remain available for existing message history.
