@@ -1,0 +1,21 @@
+{
+  "name": "chatflow-gateway",
+  "version": "1.0.0",
+  "description": "Custom WebSocket Gateway and File Server for ChatFlow (RFC 6455 compliant)",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": ["websocket", "rfc6455", "chat", "networking"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.23.13",
+    "typescript": "^5.7.2"
+  }
+}

@@ -9,4 +9,21 @@ supabase/.branches/
 coverage/
 test-results/
 
+# Keys and certificates
+*.key
+*.pem
+*.cert
+*.crt
+
+# Electron and build artifacts
+dist-electron/
+release/
+build/
+out/
+
+# Gateway artifacts
+gateway/dist/
+gateway/uploads/
+gateway/test-uploads/
+
 /DoAnLapTrinhMang/
