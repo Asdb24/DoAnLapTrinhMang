@@ -157,6 +157,15 @@ describe('RPC actions and failures',()=>{
   expect(server.client.rpc).toHaveBeenCalledWith('set_channel_membership',{target_conversation:channel.id,joined:true});expect(server.client.rpc).toHaveBeenCalledWith('invite_channel_member',{target_conversation:channel.id,target_user:'contact-1'});
   expect(server.client.rpc).toHaveBeenCalledWith('set_conversation_muted',{target_conversation:'c1',muted_value:true});expect(server.client.rpc).toHaveBeenCalledWith('set_blocked',{target_user:'block-1',blocked:false});
  });
+ it('supports editing and deleting messages with optimistic update and RPC persistence',async()=>{
+  const server=mockCloud();await mount();await open();
+  const initialMsg={...message('msg-edit-del','Original message'),senderId:server.user.id,isSentByMe:true};
+  server.history.set('c1',[initialMsg]);
+  await act(async()=>{await flow.editMessage('c1','msg-edit-del','Updated message');});
+  expect(server.client.rpc).toHaveBeenCalledWith('edit_message',{target_message:'msg-edit-del',new_content:'Updated message'});
+  await act(async()=>{await flow.deleteMessage('c1','msg-edit-del');});
+  expect(server.client.rpc).toHaveBeenCalledWith('delete_message',{target_message:'msg-edit-del'});
+ });
  it('retains settings after save failure and converts avatar bytes before saving',async()=>{
   const server=mockCloud();await mount();server.saveSettings.mockRejectedValueOnce(new Error('Save failed'));
   await act(async()=>{expect(await flow.updateSettings({displayName:'Unsaved'})).toBe(false);});expect(flow.settings.displayName).toBe(server.state.settings.displayName);

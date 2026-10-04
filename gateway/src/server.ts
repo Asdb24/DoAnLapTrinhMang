@@ -21,6 +21,10 @@ import {
   type SendMsgPacket,
   type MsgAckPacket,
   type NewMsgPacket,
+  type EditMsgPacket,
+  type MsgEditedPacket,
+  type DeleteMsgPacket,
+  type MsgDeletedPacket,
   type JoinRoomPacket,
   type LeaveRoomPacket,
   type TypingPacket,
@@ -275,6 +279,12 @@ export class ChatFlowGateway {
       case 'SEND_MSG':
         this.handleSendMsg(client, packet);
         break;
+      case 'EDIT_MSG':
+        this.handleEditMsg(client, packet);
+        break;
+      case 'DELETE_MSG':
+        this.handleDeleteMsg(client, packet);
+        break;
       case 'TYPING':
         this.handleTyping(client, packet);
         break;
@@ -382,6 +392,37 @@ export class ChatFlowGateway {
       for (const member of members) {
         member.sendPacket(newMsg);
       }
+    }
+  }
+
+  private handleEditMsg(client: ClientConnection, packet: EditMsgPacket) {
+    const members = this.roomMembers.get(packet.roomId);
+    if (!members) return;
+    const nowIso = new Date().toISOString();
+    const editedPacket: MsgEditedPacket = {
+      type: 'MSG_EDITED',
+      roomId: packet.roomId,
+      messageId: packet.messageId,
+      newContent: packet.newContent,
+      updatedAt: nowIso,
+    };
+    for (const member of members) {
+      member.sendPacket(editedPacket);
+    }
+  }
+
+  private handleDeleteMsg(client: ClientConnection, packet: DeleteMsgPacket) {
+    const members = this.roomMembers.get(packet.roomId);
+    if (!members) return;
+    const nowIso = new Date().toISOString();
+    const deletedPacket: MsgDeletedPacket = {
+      type: 'MSG_DELETED',
+      roomId: packet.roomId,
+      messageId: packet.messageId,
+      deletedAt: nowIso,
+    };
+    for (const member of members) {
+      member.sendPacket(deletedPacket);
     }
   }
 

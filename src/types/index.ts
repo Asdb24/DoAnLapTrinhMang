@@ -29,6 +29,8 @@ export interface MessageType {
   status?: "sending" | "failed" | "sent" | "delivered" | "read";
   reactions?: MessageReaction[];
   attachments?: MessageAttachment[];
+  isDeleted?: boolean;
+  isEdited?: boolean;
 }
 
 export interface SharedMediaItem {
@@ -46,6 +48,7 @@ export interface Conversation {
   id: string;
   name: string;
   type: "direct" | "group";
+  otherUserId?: string;
   avatar?: string;
   presence?: PresenceStatus;
   lastMessage: string;

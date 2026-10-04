@@ -11,6 +11,8 @@ class TestUser {
     this.receivedMessages = [];
     this.receivedAcks = [];
     this.receivedTyping = [];
+    this.receivedEdits = [];
+    this.receivedDeletes = [];
   }
 
   async waitForOpen() {
@@ -26,11 +28,17 @@ class TestUser {
           if (packet.type === 'WELCOME') {
             console.log(`[${this.name}] Nhận gói WELCOME từ Gateway. Session: ${packet.sessionId}`);
           } else if (packet.type === 'MSG_ACK') {
-            console.log(`[${this.name}] Nhận MSG_ACK (Server xác nhận tin nhắn): clientMsgId = ${packet.clientMsgId}`);
+            console.log(`[${this.name}] Nhận MSG_ACK (Server xác nhận tin nhắn): clientMsgId = ${packet.clientMsgId}, serverMsgId = ${packet.serverMsgId}`);
             this.receivedAcks.push(packet);
           } else if (packet.type === 'NEW_MSG') {
-            console.log(`[${this.name}] NHẬN ĐƯỢC TIN NHẮN TỪ [${packet.msg.senderName}]: "${packet.msg.content}"`);
+            console.log(`[${this.name}] NHẬN ĐƯỢC TIN NHẮN TỪ [${packet.msg.senderName}]: "${packet.msg.content}" (ID: ${packet.msg.id})`);
             this.receivedMessages.push(packet.msg);
+          } else if (packet.type === 'MSG_EDITED') {
+            console.log(`[${this.name}] NHẬN ĐƯỢC CẬP NHẬT SỬA TIN NHẮN: ID=${packet.messageId}, Nội dung mới: "${packet.newContent}"`);
+            this.receivedEdits.push(packet);
+          } else if (packet.type === 'MSG_DELETED') {
+            console.log(`[${this.name}] NHẬN ĐƯỢC THÔNG BÁO XÓA/THU HỒI TIN NHẮN: ID=${packet.messageId}`);
+            this.receivedDeletes.push(packet);
           } else if (packet.type === 'TYPING') {
             console.log(`[${this.name}] Thấy đối phương đang gõ chữ: userId = ${packet.userId}`);
             this.receivedTyping.push(packet);
@@ -94,21 +102,46 @@ async function runTest() {
   });
   await new Promise((r) => setTimeout(r, 600));
 
-  // 6. Kiểm tra kết quả
-  console.log('\n--- BƯỚC 5: TỔNG KẾT KẾT QUẢ KIỂM THỬ ---');
+  // 6. Alice chỉnh sửa tin nhắn đã gửi
+  console.log(`\n--- BƯỚC 5: Alice chỉnh sửa tin nhắn đã gửi (Edit Message) ---`);
+  const aliceMsgAck = alice.receivedAcks.find((a) => a.clientMsgId === 'req_alice_001');
+  const targetMsgId = aliceMsgAck ? aliceMsgAck.serverMsgId : 'msg_alice_mock';
+  alice.send({
+    type: 'EDIT_MSG',
+    roomId,
+    messageId: targetMsgId,
+    newContent: 'Chào Bob! (đã chỉnh sửa nội dung thành công)',
+  });
+  await new Promise((r) => setTimeout(r, 600));
+
+  // 7. Alice xóa tin nhắn đã gửi (Delete/Revoke Message)
+  console.log(`\n--- BƯỚC 6: Alice xóa / thu hồi tin nhắn đã gửi (Delete Message) ---`);
+  alice.send({
+    type: 'DELETE_MSG',
+    roomId,
+    messageId: targetMsgId,
+  });
+  await new Promise((r) => setTimeout(r, 600));
+
+  // 8. Kiểm tra kết quả
+  console.log('\n--- BƯỚC 7: TỔNG KẾT KẾT QUẢ KIỂM THỬ ---');
   const bobReceivedAlice = bob.receivedMessages.some((m) => m.content.includes('Chào Bob!'));
   const aliceReceivedBob = alice.receivedMessages.some((m) => m.content.includes('Chào Alice!'));
   const bobReceivedTyping = bob.receivedTyping.length > 0;
+  const bobReceivedEdit = bob.receivedEdits.some((e) => e.messageId === targetMsgId);
+  const bobReceivedDelete = bob.receivedDeletes.some((d) => d.messageId === targetMsgId);
 
   console.log(`- Bob nhận được tin nhắn từ Alice: ${bobReceivedAlice ? '✅ THÀNH CÔNG' : '❌ THẤT BẠI'}`);
   console.log(`- Alice nhận được tin nhắn phản hồi từ Bob: ${aliceReceivedBob ? '✅ THÀNH CÔNG' : '❌ THẤT BẠI'}`);
   console.log(`- Bob nhìn thấy hiệu ứng Alice đang gõ (Typing): ${bobReceivedTyping ? '✅ THÀNH CÔNG' : '❌ THẤT BẠI'}`);
+  console.log(`- Bob nhận được sự kiện Alice sửa tin nhắn (Edit): ${bobReceivedEdit ? '✅ THÀNH CÔNG' : '❌ THẤT BẠI'}`);
+  console.log(`- Bob nhận được sự kiện Alice xóa tin nhắn (Delete): ${bobReceivedDelete ? '✅ THÀNH CÔNG' : '❌ THẤT BẠI'}`);
 
   alice.close();
   bob.close();
 
-  if (bobReceivedAlice && aliceReceivedBob && bobReceivedTyping) {
-    console.log('\n🎉 KẾT QUẢ: 2 NGƯỜI CHAT QUA LẠI HOÀN TOÀN THÀNH CÔNG 100% QUA CLOUD VPS!');
+  if (bobReceivedAlice && aliceReceivedBob && bobReceivedTyping && bobReceivedEdit && bobReceivedDelete) {
+    console.log('\n🎉 KẾT QUẢ: TOÀN BỘ CHAT, TYPING, EDIT VÀ DELETE ĐÃ THÀNH CÔNG 100% TRÊN MÁY CHỦ ORACLE CLOUD VPS!');
     process.exit(0);
   } else {
     console.log('\n❌ KẾT QUẢ: Có lỗi trong quá trình truyền nhận.');

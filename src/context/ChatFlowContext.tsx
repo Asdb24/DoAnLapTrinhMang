@@ -31,7 +31,10 @@ interface ChatFlowContextType extends ApiState {
   setConversationMuted:(id:string,muted:boolean)=>Promise<boolean>;
   inviteMember:(channelId:string,contactId:string)=>Promise<boolean>;
   updateSettings:(settings:Partial<UserSettings>)=>Promise<boolean>;
+  blockUser:(id:string)=>Promise<boolean>;
   unblockUser:(id:string)=>Promise<boolean>;
+  deleteMessage:(conversationId:string,messageId:string)=>Promise<boolean>;
+  editMessage:(conversationId:string,messageId:string,newContent:string)=>Promise<boolean>;
   clearAllChatHistory:()=>Promise<boolean>;
   deleteAccount:()=>Promise<boolean>;
   logout:()=>Promise<boolean>;
@@ -218,7 +221,27 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
       }
     });
 
-    return()=>{cancelled=true;reconcileActive.current=null;unsubscribe();unsubGwMessage();gatewayClient.leaveRoom(id);window.removeEventListener('online',reconcile);document.removeEventListener('visibilitychange',onVisible);};
+    const unsubGwEdited = gatewayClient.onMsgEdited(pkt => {
+      if (pkt.roomId === id && valid()) {
+        const currentMsgs = stateRef.current?.conversations.find(c => c.id === id)?.messages || [];
+        const target = currentMsgs.find(m => m.id === pkt.messageId);
+        if (target) {
+          replaceMessages(id, [{ ...target, content: pkt.newContent, isEdited: true }]);
+        }
+      }
+    });
+
+    const unsubGwDeleted = gatewayClient.onMsgDeleted(pkt => {
+      if (pkt.roomId === id && valid()) {
+        const currentMsgs = stateRef.current?.conversations.find(c => c.id === id)?.messages || [];
+        const target = currentMsgs.find(m => m.id === pkt.messageId);
+        if (target) {
+          replaceMessages(id, [{ ...target, isDeleted: true, content: 'Message deleted', attachments: [], media: null, reactions: [] }]);
+        }
+      }
+    });
+
+    return()=>{cancelled=true;reconcileActive.current=null;unsubscribe();unsubGwMessage();unsubGwEdited();unsubGwDeleted();gatewayClient.leaveRoom(id);window.removeEventListener('online',reconcile);document.removeEventListener('visibilitychange',onVisible);};
   },[activeConversationId,userId,historyVersion,replaceMessages,report]);
   const loadOlder=useCallback(async()=>{
     const id=activeRef.current,current=userRef.current,epoch=activeEpoch.current;
@@ -303,7 +326,24 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
     setConversationMuted:(id,muted)=>mutation(async()=>check(await getSupabase().rpc('set_conversation_muted',{target_conversation:id,muted_value:muted}))),
     inviteMember:(id,contactId)=>mutation(async()=>check(await getSupabase().rpc('invite_channel_member',{target_conversation:id,target_user:contactId}))),
     updateSettings:settings=>mutation(async()=>{const values={...settings};if(values.avatar?.startsWith('data:'))values.avatar=await uploadAvatar(values.avatar,userRef.current!.id);await saveSettings(values);}),
+    blockUser:id=>mutation(async()=>check(await getSupabase().rpc('set_blocked',{target_user:id,blocked:true}))),
     unblockUser:id=>mutation(async()=>check(await getSupabase().rpc('set_blocked',{target_user:id,blocked:false}))),
+    deleteMessage:async(convId,messageId)=>(await run(async()=>{
+      gatewayClient.deleteMessage(convId,messageId);
+      const currentMsgs=stateRef.current?.conversations.find(c=>c.id===convId)?.messages||[];
+      const target=currentMsgs.find(m=>m.id===messageId);
+      if(target)replaceMessages(convId,[{...target,isDeleted:true,content:'Message deleted',attachments:[],media:null,reactions:[]}]);
+      try{check(await getSupabase().rpc('delete_message',{target_message:messageId}));}catch(e){console.warn('delete_message RPC fallback:',e);}
+      return true;
+    }))??false,
+    editMessage:async(convId,messageId,newContent)=>(await run(async()=>{
+      gatewayClient.editMessage(convId,messageId,newContent);
+      const currentMsgs=stateRef.current?.conversations.find(c=>c.id===convId)?.messages||[];
+      const target=currentMsgs.find(m=>m.id===messageId);
+      if(target)replaceMessages(convId,[{...target,content:newContent,isEdited:true}]);
+      try{check(await getSupabase().rpc('edit_message',{target_message:messageId,new_content:newContent}));}catch(e){console.warn('edit_message RPC fallback:',e);}
+      return true;
+    }))??false,
     clearAllChatHistory:()=>mutation(async()=>{check(await getSupabase().rpc('clear_my_history'));activeEpoch.current++;clearGeneration.current++;const current=stateRef.current;if(current)apply({...current,conversations:current.conversations.map(c=>({...c,messages:[]}))});setHasOlder(false);readPending.current.clear();setHistoryVersion(value=>value+1);}),
     logout:async()=>(await run(async()=>{const result=await getSupabase().auth.signOut();if(result.error)throw result.error;return true;}))??false,
     deleteAccount:async()=>(await run(async()=>{await api('/account','DELETE');await getSupabase().auth.signOut({scope:'local'});return true;}))??false,

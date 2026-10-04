@@ -14,9 +14,10 @@ export function avatarUrl(value: string) {
   return `/api/avatars/${encodeURIComponent(id)}?v=${encodeURIComponent(version || '')}`;
 }
 export function mapConversation(row: ConversationMetadata, userId: string): Conversation {
-  const other = row.members.find(member => member.user_id !== userId)?.profile;
+  const otherMember = row.members.find(member => member.user_id !== userId);
+  const other = otherMember?.profile;
   return { id:row.id, name:row.type==='direct' ? other?.display_name || 'Deleted user' : row.type==='saved' ? 'Saved messages' : row.title,
-    type:row.type==='group'?'group':'direct', avatar:other ? avatarUrl(other.avatar_url):'', presence:other?.presence,
+    type:row.type==='group'?'group':'direct', otherUserId:row.type==='direct' ? otherMember?.user_id : undefined, avatar:other ? avatarUrl(other.avatar_url):'', presence:other?.presence,
     lastMessage:row.last_message_preview, lastMessageTime:row.last_message_at ? new Date(row.last_message_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'',
     unreadCount:row.unread_count, messages:[], description:row.description, membersCount:row.members.length,isMuted:row.muted };
 }
