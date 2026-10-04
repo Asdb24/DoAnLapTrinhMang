@@ -16,6 +16,7 @@ import { AuthScreen } from '@/components/auth/AuthScreen';
 import { Button } from '@/components/ui/button';
 import type { ChatMedia } from '@/types/media';
 import { usedEmojis } from '@/services/media';
+import { gatewayClient } from '@/services/gateway-client';
 
 type NewChannel = Pick<Channel,'name'|'description'|'category'|'isPrivate'>;
 interface ChatFlowContextType extends ApiState {
@@ -137,7 +138,17 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
     const onVisible=()=>{if(document.visibilityState==='visible')update();};
     document.addEventListener('visibilitychange',onVisible);
     window.addEventListener('online',update);
-    return()=>{cancelled=true;clearTimeout(timer);unsubscribe();document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('online',update);};
+
+    gatewayClient.connect({
+      id: user.id,
+      displayName: stateRef.current?.settings.displayName || user.email || 'You',
+      avatarUrl: stateRef.current?.settings.avatar,
+    });
+    const unsubStatus = gatewayClient.onStatus(val => {
+      setRealtimeStatus(val);
+    });
+
+    return()=>{cancelled=true;clearTimeout(timer);unsubscribe();document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('online',update);unsubStatus();gatewayClient.disconnect();};
   },[user,refreshState,report]);
   useEffect(()=>{if(state)document.documentElement.classList.toggle('dark',state.settings.theme==='dark');},[state?.settings.theme]);
   const userId=user?.id;
@@ -178,7 +189,36 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
     reconcileActive.current=reconcile;
     const onVisible=()=>{if(document.visibilityState==='visible')reconcile();};
     window.addEventListener('online',reconcile);document.addEventListener('visibilitychange',onVisible);
-    return()=>{cancelled=true;reconcileActive.current=null;unsubscribe();window.removeEventListener('online',reconcile);document.removeEventListener('visibilitychange',onVisible);};
+
+    gatewayClient.joinRoom(id);
+    const unsubGwMessage = gatewayClient.onMessage(gwMsg => {
+      if (gwMsg.roomId === id && valid()) {
+        const incomingMsg: MessageType = {
+          id: gwMsg.id,
+          clientMessageId: gwMsg.clientMsgId,
+          senderId: gwMsg.senderId,
+          senderName: gwMsg.senderName,
+          senderAvatar: gwMsg.senderAvatar,
+          content: gwMsg.content,
+          createdAt: gwMsg.createdAt,
+          timestamp: new Date(gwMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          date: new Date(gwMsg.createdAt).toLocaleDateString(),
+          isSentByMe: gwMsg.senderId === userRef.current?.id,
+          status: 'sent',
+          attachments: (gwMsg.attachments || []).map(a => ({
+            id: a.id,
+            name: a.name,
+            size: `${(a.size / 1024).toFixed(1)} KB`,
+            type: (a.mimeType.startsWith('image/') ? 'image' : 'doc') as 'image' | 'doc',
+            url: a.url,
+          })),
+          media: gwMsg.media,
+        };
+        replaceMessages(id, [incomingMsg]);
+      }
+    });
+
+    return()=>{cancelled=true;reconcileActive.current=null;unsubscribe();unsubGwMessage();gatewayClient.leaveRoom(id);window.removeEventListener('online',reconcile);document.removeEventListener('visibilitychange',onVisible);};
   },[activeConversationId,userId,historyVersion,replaceMessages,report]);
   const loadOlder=useCallback(async()=>{
     const id=activeRef.current,current=userRef.current,epoch=activeEpoch.current;
@@ -218,6 +258,19 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
       const now=new Date();
       const optimistic:MessageType={id:`pending:${clientId}`,clientMessageId:clientId,senderId:current.id,senderName:stateRef.current?.settings.displayName||'You',content,attachments,media,createdAt:now.toISOString(),timestamp:now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),date:now.toLocaleDateString(),isSentByMe:true,status:'sending'};
       replaceMessages(id,[optimistic]);
+      gatewayClient.sendChatMessage(
+        id,
+        content,
+        clientId,
+        attachments.map(a => ({
+          id: a.id || '',
+          name: a.name,
+          size: typeof a.size === 'string' ? parseFloat(a.size) * 1024 : 0,
+          mimeType: a.type === 'image' ? 'image/png' : 'application/octet-stream',
+          url: a.url || '',
+        })),
+        media
+      );
       let row:MessageRow;
       try {
         row=check(await getSupabase().rpc('send_message',{target_conversation:id,message_content:content,client_id:clientId,attachment_ids:attachments.map(a=>a.id!),message_media:media||null,used_emojis:usedEmojis(content)})) as unknown as MessageRow;
