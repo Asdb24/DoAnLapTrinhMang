@@ -458,6 +458,14 @@ export type Database = {
         Args: { target_attachment: string }
         Returns: undefined
       }
+      delete_message: {
+        Args: { target_message: string }
+        Returns: undefined
+      }
+      edit_message: {
+        Args: { new_content: string; target_message: string }
+        Returns: undefined
+      }
       get_or_create_direct_conversation: {
         Args: { other_user_id: string }
         Returns: string

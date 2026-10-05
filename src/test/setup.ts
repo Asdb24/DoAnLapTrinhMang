@@ -64,7 +64,21 @@ export function mockCloud(initial=fixture()) {
     if(name==='mark_conversation_read'){const c=state.conversations.find(c=>c.id===args.target_conversation);if(c)c.unreadCount=0;}
     if(name==='set_channel_membership'){const c=state.channels.find(c=>c.id===args.target_conversation);if(c)c.isJoined=Boolean(args.joined);}
     if(name==='set_conversation_muted'){const c=state.conversations.find(c=>c.id===args.target_conversation);if(c)c.isMuted=Boolean(args.muted_value);}
-    if(name==='set_blocked')state.blockedUsers=state.blockedUsers.filter(b=>b.id!==args.target_user);
+    if(name==='set_blocked'){
+      if(args.blocked){
+        if(!state.blockedUsers.some(b=>b.id===args.target_user))state.blockedUsers.push({id:String(args.target_user),name:'Blocked User',handle:'blocked',avatar:'',blockedDate:'2026-10-04'});
+      } else {
+        state.blockedUsers=state.blockedUsers.filter(b=>b.id!==args.target_user);
+      }
+    }
+    if(name==='delete_message'){
+      for(const [cId,msgs] of history.entries()){history.set(cId,msgs.map(m=>m.id===args.target_message?{...m,isDeleted:true,content:'Message deleted'}:m));}
+      return {data:null,error:null};
+    }
+    if(name==='edit_message'){
+      for(const [cId,msgs] of history.entries()){history.set(cId,msgs.map(m=>m.id===args.target_message?{...m,isEdited:true,content:String(args.new_content)}:m));}
+      return {data:null,error:null};
+    }
     if(name==='clear_my_history')history.clear();
     return {data:null,error:null};
    }catch(error){return {data:null,error:{message:error instanceof Error?error.message:String(error)}};}

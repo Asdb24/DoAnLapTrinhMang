@@ -10,10 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UserStatusIndicator, UserStatusBadge } from "@/components/common/UserStatusIndicator";
-import { Search, MessageSquare, Mail, UserPlus, Users } from "lucide-react";
+import { Search, MessageSquare, Mail, UserPlus, Users, ShieldAlert, ShieldCheck } from "lucide-react";
 
 export function ContactsView() {
-  const { contacts, startDirectChat, pending } = useChatFlow();
+  const { contacts, startDirectChat, pending, blockedUsers, blockUser, unblockUser } = useChatFlow();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "online">("all");
   const router = useRouter();
@@ -144,16 +144,36 @@ export function ContactsView() {
                   )}
                 </CardHeader>
 
-                <CardFooter className="pt-2 border-t">
+                <CardFooter className="pt-2 border-t flex items-center gap-2">
                   <Button
                     variant="default"
                     size="sm"
-                    className="w-full gap-2 text-xs"
+                    className="flex-1 gap-2 text-xs"
                     disabled={pending}
                     onClick={() => handleStartChat(contact.id)}
                   >
                     <MessageSquare className="h-3.5 w-3.5" />
                     Direct Message
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`text-xs px-2.5 ${blockedUsers.some(b => b.id === contact.id) ? "text-primary border-primary/40" : "text-destructive border-destructive/30 hover:bg-destructive/10"}`}
+                    disabled={pending}
+                    title={blockedUsers.some(b => b.id === contact.id) ? "Unblock contact" : "Block contact"}
+                    onClick={async () => {
+                      if (blockedUsers.some(b => b.id === contact.id)) {
+                        await unblockUser(contact.id);
+                      } else {
+                        await blockUser(contact.id);
+                      }
+                    }}
+                  >
+                    {blockedUsers.some(b => b.id === contact.id) ? (
+                      <ShieldCheck className="h-3.5 w-3.5 text-green-500" />
+                    ) : (
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                    )}
                   </Button>
                 </CardFooter>
               </Card>

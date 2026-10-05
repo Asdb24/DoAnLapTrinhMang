@@ -250,6 +250,33 @@ test('ChatFlow Gateway End-to-End Test Suite', async (t) => {
     assert.equal(downloadedText, fileContent);
   });
 
+  await t.test('5. Edit and Delete message over gateway broadcast', async () => {
+    // Client A sends EDIT_MSG
+    clientA.sendMaskedPacket({
+      type: 'EDIT_MSG',
+      roomId: 'room_general',
+      messageId: 'msg_to_edit_123',
+      newContent: 'Updated content from client A',
+    });
+
+    // Client B receives MSG_EDITED
+    const editPacket = await clientB.waitForPacket('MSG_EDITED');
+    assert.equal(editPacket.messageId, 'msg_to_edit_123');
+    assert.equal(editPacket.newContent, 'Updated content from client A');
+
+    // Client A sends DELETE_MSG
+    clientA.sendMaskedPacket({
+      type: 'DELETE_MSG',
+      roomId: 'room_general',
+      messageId: 'msg_to_edit_123',
+    });
+
+    // Client B receives MSG_DELETED
+    const deletePacket = await clientB.waitForPacket('MSG_DELETED');
+    assert.equal(deletePacket.messageId, 'msg_to_edit_123');
+    assert.ok(deletePacket.deletedAt);
+  });
+
   clientA.close();
   clientB.close();
   await gateway.stop();

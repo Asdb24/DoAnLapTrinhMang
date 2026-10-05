@@ -6,6 +6,10 @@ import type {
   SendMsgPacket,
   MsgAckPacket,
   NewMsgPacket,
+  EditMsgPacket,
+  MsgEditedPacket,
+  DeleteMsgPacket,
+  MsgDeletedPacket,
   TypingPacket,
   PresencePacket,
   FileStartPacket,
@@ -23,6 +27,8 @@ export interface GatewayUser {
 
 export type MessageHandler = (msg: NewMsgPacket['msg']) => void;
 export type MsgAckHandler = (ack: MsgAckPacket) => void;
+export type MsgEditedHandler = (packet: MsgEditedPacket) => void;
+export type MsgDeletedHandler = (packet: MsgDeletedPacket) => void;
 export type TypingHandler = (typing: TypingPacket) => void;
 export type PresenceHandler = (presence: PresencePacket) => void;
 export type StatusHandler = (status: GatewayConnectionStatus) => void;
@@ -39,6 +45,8 @@ class GatewayClient {
 
   private messageHandlers: Set<MessageHandler> = new Set();
   private ackHandlers: Set<MsgAckHandler> = new Set();
+  private editHandlers: Set<MsgEditedHandler> = new Set();
+  private deleteHandlers: Set<MsgDeletedHandler> = new Set();
   private typingHandlers: Set<TypingHandler> = new Set();
   private presenceHandlers: Set<PresenceHandler> = new Set();
   private statusHandlers: Set<StatusHandler> = new Set();
@@ -147,6 +155,14 @@ class GatewayClient {
         for (const handler of this.messageHandlers) handler(packet.msg);
         break;
 
+      case 'MSG_EDITED':
+        for (const handler of this.editHandlers) handler(packet);
+        break;
+
+      case 'MSG_DELETED':
+        for (const handler of this.deleteHandlers) handler(packet);
+        break;
+
       case 'TYPING':
         for (const handler of this.typingHandlers) handler(packet);
         break;
@@ -219,6 +235,27 @@ class GatewayClient {
       content,
       attachments,
       media,
+    };
+    this.sendPacket(packet);
+  }
+
+  public editMessage(roomId: string, messageId: string, newContent: string) {
+    const packet: EditMsgPacket = {
+      type: 'EDIT_MSG',
+      roomId,
+      messageId,
+      newContent,
+      senderId: this.user?.id,
+    };
+    this.sendPacket(packet);
+  }
+
+  public deleteMessage(roomId: string, messageId: string) {
+    const packet: DeleteMsgPacket = {
+      type: 'DELETE_MSG',
+      roomId,
+      messageId,
+      senderId: this.user?.id,
     };
     this.sendPacket(packet);
   }
@@ -331,6 +368,16 @@ class GatewayClient {
   public onMsgAck(handler: MsgAckHandler): () => void {
     this.ackHandlers.add(handler);
     return () => this.ackHandlers.delete(handler);
+  }
+
+  public onMsgEdited(handler: MsgEditedHandler): () => void {
+    this.editHandlers.add(handler);
+    return () => this.editHandlers.delete(handler);
+  }
+
+  public onMsgDeleted(handler: MsgDeletedHandler): () => void {
+    this.deleteHandlers.add(handler);
+    return () => this.deleteHandlers.delete(handler);
   }
 
   public onTyping(handler: TypingHandler): () => void {

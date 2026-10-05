@@ -11,6 +11,10 @@ export type PacketType =
   | 'SEND_MSG'
   | 'MSG_ACK'
   | 'NEW_MSG'
+  | 'EDIT_MSG'
+  | 'MSG_EDITED'
+  | 'DELETE_MSG'
+  | 'MSG_DELETED'
   | 'TYPING'
   | 'PRESENCE'
   | 'FILE_START'
@@ -110,6 +114,36 @@ export interface NewMsgPacket extends BasePacket {
   };
 }
 
+export interface EditMsgPacket extends BasePacket {
+  type: 'EDIT_MSG';
+  roomId: string;
+  messageId: string;
+  newContent: string;
+  senderId?: string;
+}
+
+export interface MsgEditedPacket extends BasePacket {
+  type: 'MSG_EDITED';
+  roomId: string;
+  messageId: string;
+  newContent: string;
+  updatedAt: string;
+}
+
+export interface DeleteMsgPacket extends BasePacket {
+  type: 'DELETE_MSG';
+  roomId: string;
+  messageId: string;
+  senderId?: string;
+}
+
+export interface MsgDeletedPacket extends BasePacket {
+  type: 'MSG_DELETED';
+  roomId: string;
+  messageId: string;
+  deletedAt: string;
+}
+
 export interface TypingPacket extends BasePacket {
   type: 'TYPING';
   roomId: string;
@@ -170,6 +204,10 @@ export type GatewayPacket =
   | SendMsgPacket
   | MsgAckPacket
   | NewMsgPacket
+  | EditMsgPacket
+  | MsgEditedPacket
+  | DeleteMsgPacket
+  | MsgDeletedPacket
   | TypingPacket
   | PresencePacket
   | FileStartPacket

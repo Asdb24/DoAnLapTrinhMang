@@ -18,6 +18,8 @@ import {
   Bell,
   BellOff,
   Search,
+  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 
 interface ChatRightSidebarProps {
@@ -29,8 +31,9 @@ export function ChatRightSidebar({
   conversation,
   onClose,
 }: ChatRightSidebarProps) {
-  const { setConversationMuted, pending, channels } = useChatFlow();
+  const { setConversationMuted, pending, channels, blockedUsers, blockUser, unblockUser } = useChatFlow();
   const isMuted = !!conversation.isMuted;
+  const isBlocked = Boolean(conversation.otherUserId && blockedUsers.some(b => b.id === conversation.otherUserId));
 
   const attachments: SharedMediaItem[] = conversation.messages.flatMap(message => (message.attachments || []).map((attachment, index) => ({
     id: message.id + "-" + index, name: attachment.name, size: attachment.size,
@@ -104,6 +107,34 @@ export function ChatRightSidebar({
                 </>
               )}
             </Button>
+
+            {conversation.type === "direct" && conversation.otherUserId && (
+              <Button
+                variant={isBlocked ? "outline" : "outline"}
+                size="sm"
+                className={`text-xs h-8 gap-1.5 ${isBlocked ? "text-primary border-primary/50" : "text-destructive border-destructive/30 hover:bg-destructive/10"}`}
+                disabled={pending}
+                onClick={async () => {
+                  if (isBlocked) {
+                    await unblockUser(conversation.otherUserId!);
+                  } else {
+                    await blockUser(conversation.otherUserId!);
+                  }
+                }}
+              >
+                {isBlocked ? (
+                  <>
+                    <ShieldCheck className="h-3.5 w-3.5 text-green-500" />
+                    Unblock
+                  </>
+                ) : (
+                  <>
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    Block
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
 

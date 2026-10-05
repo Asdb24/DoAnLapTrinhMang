@@ -8,7 +8,7 @@ supabase/.branches/
 *.tsbuildinfo
 coverage/
 test-results/
-
+.agent-history/
 # Keys and certificates
 *.key
 *.pem
