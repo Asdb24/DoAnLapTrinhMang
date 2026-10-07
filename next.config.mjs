@@ -3,6 +3,7 @@ import { resolveAppOrigin } from './src/lib/public-url.mjs';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   reactStrictMode: true,
   turbopack: { root: fileURLToPath(new URL('.', import.meta.url)) },
   outputFileTracingRoot: fileURLToPath(new URL('.', import.meta.url)),
