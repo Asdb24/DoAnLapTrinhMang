@@ -66,8 +66,8 @@ async function runTest() {
   await Promise.all([alice.waitForOpen(), bob.waitForOpen()]);
 
   // 1. Handshake HELLO
-  alice.send({ type: 'HELLO', userId: alice.userId, displayName: 'Alice' });
-  bob.send({ type: 'HELLO', userId: bob.userId, displayName: 'Bob' });
+  alice.send({ type: 'HELLO', userId: alice.userId, displayName: 'Alice', token: `mock-token:${alice.userId}` });
+  bob.send({ type: 'HELLO', userId: bob.userId, displayName: 'Bob', token: `mock-token:${bob.userId}` });
   await new Promise((r) => setTimeout(r, 300));
 
   // 2. Cùng tham gia vào một phòng chat (Room: 'room_demo_999')

@@ -50,6 +50,7 @@ export function mockCloud(initial=fixture()) {
   subscribeInbox:vi.fn((id:string,changed:()=>void)=>{inboxes.set(id,changed);return ()=>{inboxes.delete(id);server.inboxUnsubscribe(id);};}),
   subscribeConversation:vi.fn((id:string,callbacks:ConversationHandlers)=>{conversations.set(id,callbacks);return ()=>{conversations.delete(id);server.conversationUnsubscribe(id);};}),
   client:{auth:{
+   getSession:vi.fn(async()=>({data:{session:server.authenticated?{user,access_token:'mock-access-token'}:null},error:null as {name:string;message:string}|null})),
    getUser:vi.fn(async()=>({data:{user:server.authenticated?user:null},error:null as {name:string;message:string}|null})),
    onAuthStateChange:vi.fn((listener:typeof authListener)=>{authListener=listener;return {data:{subscription:{unsubscribe:()=>{authListener=undefined;server.authUnsubscribe();}}}};}),
    signInWithPassword:vi.fn(async(_values:{email:string;password:string})=>{server.emitAuth(user);return {data:{user,session:{user}},error:null as {message:string}|null};}),

@@ -122,6 +122,7 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
     const {data:{subscription}}=client.auth.onAuthStateChange((_event,session)=>{
       sawAuthEvent=true;accept(session?.user||null);
       if(!session)setStatus('unauthenticated');
+      else if (session.access_token) gatewayClient.updateToken(session.access_token);
     });
     void client.auth.getUser().then(({data,error:authError})=>{
       if(!mounted||sawAuthEvent)return;
@@ -142,16 +143,30 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
     document.addEventListener('visibilitychange',onVisible);
     window.addEventListener('online',update);
 
-    gatewayClient.connect({
-      id: user.id,
-      displayName: stateRef.current?.settings.displayName || user.email || 'You',
-      avatarUrl: stateRef.current?.settings.avatar,
+    const client = getSupabase();
+    const tokenPromise = typeof client.auth?.getSession === 'function'
+      ? client.auth.getSession().then(({ data }) => data?.session?.access_token)
+      : Promise.resolve(undefined);
+
+    void tokenPromise.then((token) => {
+      if (cancelled) return;
+      gatewayClient.connect({
+        id: user.id,
+        displayName: stateRef.current?.settings.displayName || user.email || 'You',
+        avatarUrl: stateRef.current?.settings.avatar,
+      }, token);
     });
     const unsubStatus = gatewayClient.onStatus(val => {
       setRealtimeStatus(val);
     });
+    const unsubGwError = gatewayClient.onError(err => {
+      console.warn('[ChatFlow] Gateway error:', err.code, err.message);
+      if (err.code === 'AUTH_FAILED') {
+        report(new Error('Gateway authentication failed. Please sign in again.'));
+      }
+    });
 
-    return()=>{cancelled=true;clearTimeout(timer);unsubscribe();document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('online',update);unsubStatus();gatewayClient.disconnect();};
+    return()=>{cancelled=true;clearTimeout(timer);unsubscribe();document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('online',update);unsubStatus();unsubGwError();gatewayClient.disconnect();};
   },[user,refreshState,report]);
   useEffect(()=>{if(state)document.documentElement.classList.toggle('dark',state.settings.theme==='dark');},[state?.settings.theme]);
   const userId=user?.id;

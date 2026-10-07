@@ -15,6 +15,7 @@ import type {
   FileStartPacket,
   FileChunkPacket,
   FileCompletePacket,
+  ErrorPacket,
 } from '../../gateway/src/protocol';
 
 export type GatewayConnectionStatus = 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED';
@@ -23,6 +24,7 @@ export interface GatewayUser {
   id: string;
   displayName: string;
   avatarUrl?: string;
+  token?: string;
 }
 
 export type MessageHandler = (msg: NewMsgPacket['msg']) => void;
@@ -32,6 +34,7 @@ export type MsgDeletedHandler = (packet: MsgDeletedPacket) => void;
 export type TypingHandler = (typing: TypingPacket) => void;
 export type PresenceHandler = (presence: PresencePacket) => void;
 export type StatusHandler = (status: GatewayConnectionStatus) => void;
+export type ErrorHandler = (error: ErrorPacket) => void;
 
 const CHUNK_SIZE = 64 * 1024; // 64 KB per chunk
 
@@ -50,6 +53,7 @@ class GatewayClient {
   private typingHandlers: Set<TypingHandler> = new Set();
   private presenceHandlers: Set<PresenceHandler> = new Set();
   private statusHandlers: Set<StatusHandler> = new Set();
+  private errorHandlers: Set<ErrorHandler> = new Set();
 
   private getGatewayUrl(): string {
     if (typeof window !== 'undefined') {
@@ -61,10 +65,19 @@ class GatewayClient {
     return 'wss://168-138-160-93.sslip.io';
   }
 
-  public connect(user: GatewayUser) {
-    this.user = user;
+  public connect(user: GatewayUser, token?: string) {
+    this.user = {
+      ...user,
+      token: token || user.token,
+    };
     this.shouldReconnect = true;
     this.initSocket();
+  }
+
+  public updateToken(token: string) {
+    if (this.user) {
+      this.user.token = token;
+    }
   }
 
   private initSocket() {
@@ -101,6 +114,7 @@ class GatewayClient {
           userId: this.user.id,
           displayName: this.user.displayName,
           avatarUrl: this.user.avatarUrl,
+          token: this.user.token,
         };
         this.sendPacket(hello);
       }
@@ -169,6 +183,10 @@ class GatewayClient {
 
       case 'PRESENCE':
         for (const handler of this.presenceHandlers) handler(packet);
+        break;
+
+      case 'ERROR':
+        for (const handler of this.errorHandlers) handler(packet as ErrorPacket);
         break;
 
       default:
@@ -393,6 +411,11 @@ class GatewayClient {
   public onStatus(handler: StatusHandler): () => void {
     this.statusHandlers.add(handler);
     return () => this.statusHandlers.delete(handler);
+  }
+
+  public onError(handler: ErrorHandler): () => void {
+    this.errorHandlers.add(handler);
+    return () => this.errorHandlers.delete(handler);
   }
 
   public disconnect() {
