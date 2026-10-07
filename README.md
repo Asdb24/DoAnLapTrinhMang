@@ -1,152 +1,190 @@
-# ChatFlow
+# ChatFlow — Ứng Dụng Nhắn Tin Thời Gian Thực Phân Tán (Đồ Án Lập Trình Mạng)
 
-Ứng dụng nhắn tin và cộng tác nhóm được xây dựng bằng Next.js, React, TypeScript và Supabase.
+[![Release v0.1.1](https://img.shields.io/badge/release-v0.1.1-blue.svg)](https://github.com/Asdb24/DoAnLapTrinhMang/releases/tag/v0.1.1)
+[![Platform Windows](https://img.shields.io/badge/platform-Windows%20x64-green.svg)](https://github.com/Asdb24/DoAnLapTrinhMang/releases/tag/v0.1.1)
+[![Protocol RFC 6455](https://img.shields.io/badge/protocol-RFC%206455%20WebSocket-orange.svg)](docs/TECHNICAL_DOCUMENTATION.md)
+[![Database Supabase PostgreSQL](https://img.shields.io/badge/database-PostgreSQL%20RLS-336791.svg)](docs/API.md)
+[![Build Status](https://img.shields.io/badge/tests-344%20passed-brightgreen.svg)](docs/VERIFICATION.md)
 
-## Thành viên
+ChatFlow là ứng dụng nhắn tin và cộng tác nhóm thời gian thực phân tán, kết hợp giữa kiến trúc **Next.js 16 + React 19 + Electron Desktop**, cơ sở dữ liệu **Supabase PostgreSQL (Row Level Security & RPC)** và **Custom Gateway Server (RFC 6455 WebSocket)** tự viết từ socket TCP thuần chạy trên **Oracle Cloud VPS**.
 
-- Trần Nguyễn Quốc Vinh — 23DTHJA1 — 2380602569
-- Trần Toàn — 23DTHJA1 — 2380602277
-- Trần Đức Huy — 23DTHJA1 — 2380600888
+---
 
-## Công nghệ sử dụng
+## 👥 Nhóm Thực Hiện Đề Tài
 
-- Next.js 16 và React 19
-- TypeScript
-- Tailwind CSS và các component theo phong cách shadcn/ui
-- Supabase Auth
-- PostgreSQL, Row Level Security (RLS) và RPC
-- Supabase Realtime
-- Supabase Private Storage
-- Vitest và Testing Library
+| STT | Họ và Tên | Lớp | Mã Số Sinh Viên | Vai trò |
+| :---: | :--- | :---: | :---: | :--- |
+| 1 | **Trần Nguyễn Quốc Vinh** | 23DTHJA1 | `2380602569` | Trưởng nhóm / Phát triển hệ thống |
+| 2 | **Trần Toàn** | 23DTHJA1 | `2380602277` | Thành viên / Cơ sở dữ liệu & Backend |
+| 3 | **Trần Đức Huy** | 23DTHJA1 | `2380600888` | Thành viên / Giao diện & Gateway Mạng |
 
-## Chức năng chính
+---
 
-- Đăng ký, đăng nhập, đăng xuất và khôi phục mật khẩu qua Supabase Auth.
-- Nhắn tin trực tiếp và trò chuyện trong các channel công khai hoặc riêng tư.
-- Gửi emoji, GIF GIPHY, sticker Little Orbs và reaction.
-- Gửi file đính kèm với kiểm tra loại file, kích thước, retry và cleanup upload lỗi.
-- Đồng bộ tin nhắn theo thời gian thực bằng Supabase Realtime.
-- Phân trang lịch sử tin nhắn theo cursor `(created_at, id)`.
-- Trạng thái đã đọc, mute conversation, block user và xóa lịch sử cá nhân.
-- Cài đặt giao diện sáng/tối, mật độ tin nhắn, trạng thái và thông báo.
-- Xóa tài khoản cùng các file do người dùng tải lên.
+## 🚀 Tải Bản Cài Đặt Desktop (.exe) Đã Đóng Gói Sẵn
 
-## Yêu cầu môi trường
+Ứng dụng Windows Desktop đã được đóng gói tự động qua GitHub Actions CI/CD và kết nối sẵn với máy chủ Cloud thật (không cần cấu hình `.env`):
 
-- Node.js >= 22.13.0
-- Một project Supabase
-- Supabase CLI nếu cần chạy migration hoặc kiểm tra database
+* 📦 **Tải bản cài đặt NSIS:** [ChatFlow.Setup.0.1.1.exe](https://github.com/Asdb24/DoAnLapTrinhMang/releases/download/v0.1.1/ChatFlow.Setup.0.1.1.exe)
+* ⚡ **Tải bản Portable (Chạy ngay không cần cài đặt):** [ChatFlow.0.1.1.exe](https://github.com/Asdb24/DoAnLapTrinhMang/releases/download/v0.1.1/ChatFlow.0.1.1.exe)
+* 🔗 **Trang phát hành chính thức:** [GitHub Releases v0.1.1](https://github.com/Asdb24/DoAnLapTrinhMang/releases/tag/v0.1.1)
 
-## Cài đặt và chạy local
+---
 
+## 🔑 Tài Khoản Kiểm Thử Trực Tiếp (Live Test Accounts)
+
+Hệ thống đã có sẵn tài khoản thật trên máy chủ Cloud để giáo viên hoặc người chấm đồ án kiểm thử trực tiếp:
+
+| Người dùng | Email | Mật khẩu | Trạng thái |
+| :--- | :--- | :--- | :---: |
+| **Alice** | `alice@gmail.com` | `Password123!` | Đã kích hoạt (Active) |
+| **Bob** | `bob@gmail.com` | `Password123!` | Đã kích hoạt (Active) |
+
+> 💡 *Bạn cũng có thể bấm nút **Đăng ký (Sign Up)** trực tiếp trên giao diện ứng dụng để tạo thêm tài khoản mới bất kỳ.*
+
+---
+
+## 🏗️ Kiến Trúc Mạng & Công Nghệ (Network Architecture)
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        ChatFlow Clients                                │
+│   ┌───────────────────────────────┐  ┌─────────────────────────────┐   │
+│   │ Next.js 16 Web Client (React) │  │ Electron Desktop App (.exe) │   │
+│   └──────────────┬────────────────┘  └──────────────┬──────────────┘   │
+└──────────────────┼──────────────────────────────────┼──────────────────┘
+                   │                                  │
+                   │ HTTPS / WSS                      │ Binary Chunk / RFC 6455
+                   ▼                                  ▼
+┌──────────────────────────────────────┐  ┌──────────────────────────────┐
+│        Supabase Cloud Engine         │  │ Oracle Cloud VPS Gateway     │
+│  - GoTrue Authentication (JWT)       │  │ (168-138-160-93.sslip.io)    │
+│  - PostgreSQL 16 + RLS Policies      │  │ - Custom RFC 6455 WebSocket  │
+│  - 16 Transactional SQL RPCs         │  │ - TCP Socket Engine (node:net│
+│  - Realtime Change Notifications     │  │ - Sliding Window Rate Limit  │
+│  - Private Storage Bucket Engine     │  │ - Chunked Streaming File Srv │
+└──────────────────────────────────────┘  └──────────────────────────────┘
+```
+
+### 1. Phân Tầng Công Nghệ:
+* **Giao diện & Client:** Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS, Radix UI (shadcn/ui), Lucide Icons.
+* **Desktop Wrapper:** Electron 44, `electron-builder`, tích hợp node runtime nội bộ.
+* **Cơ sở dữ liệu & Xác thực:** Supabase Auth (GoTrue), PostgreSQL với 100% chính sách Row Level Security (RLS) bảo vệ từng hàng dữ liệu, RPC transactional functions.
+* **Máy chủ Gateway thời gian thực:**
+  - Tự hiện thực hóa từ tầng socket TCP (`node:net`, `node:http`, `node:crypto`), tuân thủ chuẩn **RFC 6455 WebSocket Protocol**.
+  - Triển khai độc lập trên máy chủ **Oracle Cloud VPS** (`wss://168-138-160-93.sslip.io`).
+  - Hỗ trợ truyền nhận Frame-level, giải mã Masking Key, kiểm tra XOR byte payload, gửi nhận file dạng nhị phân theo từng chunk (Chunked File Transfer) kèm HTTP download streaming endpoint.
+
+### 2. Tiêu Chuẩn "Zero Mock Data & Zero Seed Data":
+* **Không sử dụng mock data:** Toàn bộ dữ liệu tin nhắn, phòng chat, danh bạ được lưu trữ và truy vấn trực tiếp từ cơ sở dữ liệu PostgreSQL thật.
+* **Không có cửa sau giả mạo (No mock tokens):** Mọi gói tin kết nối đều được xác thực chữ ký mật mã **HS256 JWT** hoặc kiểm tra trực tiếp qua API Supabase Auth. Các gói tin mạo danh sẽ bị Gateway từ chối và đóng socket ngay lập tức (`code: 4001`).
+
+---
+
+## 📡 Giao Thức Truyền Tin & Thao Tác Mạng (Protocol Details)
+
+Để biết chi tiết về cấu trúc gói tin, giải thích từng byte nhị phân của khung WebSocket RFC 6455, quy trình bắt tay (Handshake), gửi tin nhắn, sửa tin nhắn (Edit), xóa/thu hồi tin nhắn (Delete/Revoke) và truyền file từng phần, xin vui lòng xem tài liệu kỹ thuật chuyên sâu:
+
+👉 **[docs/TECHNICAL_DOCUMENTATION.md](docs/TECHNICAL_DOCUMENTATION.md)**
+
+---
+
+## 💻 Cài Đặt Và Chạy Local
+
+### 1. Yêu cầu môi trường:
+* Node.js >= 22.13.0
+* npm >= 10.x
+
+### 2. Cài đặt các gói phụ thuộc:
 ```powershell
+# Cài đặt frontend & desktop dependencies
 npm install
-Copy-Item .env.example .env.local
-npm run dev -- --port 3100
+
+# Cài đặt Gateway dependencies
+cd gateway
+npm install
+npm run build
+cd ..
 ```
 
-Mở [http://localhost:3100](http://localhost:3100).
-
-## Cấu hình biến môi trường
-
-Tối thiểu cần cấu hình trong `.env.local`:
-
+### 3. Cấu hình biến môi trường (`.env.local`):
+Tạo file `.env.local` ở thư mục gốc:
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 NEXT_PUBLIC_APP_URL=http://localhost:3100
+NEXT_PUBLIC_SUPABASE_URL=https://boonwujyiwqbrraqdbdy.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xv9IiylFCrxZgG3WHnk7mw_as0YB9gH
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_xv9IiylFCrxZgG3WHnk7mw_as0YB9gH
+NEXT_PUBLIC_GATEWAY_URL=wss://168-138-160-93.sslip.io
 ```
 
-Để bật tìm kiếm GIF, thêm public key của GIPHY:
+### 4. Khởi chạy ứng dụng:
+* **Chạy Web (Next.js):**
+  ```powershell
+  npm run dev
+  ```
+  Truy cập: [http://localhost:3000](http://localhost:3000)
 
-```env
-NEXT_PUBLIC_GIPHY_API_KEY=your-public-giphy-key
-```
+* **Chạy Desktop (Electron Dev):**
+  ```powershell
+  npm run electron:dev
+  ```
 
-Các biến bí mật như `SUPABASE_SECRET_KEY` hoặc `SUPABASE_SERVICE_ROLE_KEY` chỉ được dùng phía server. Không đặt chúng trong biến bắt đầu bằng `NEXT_PUBLIC_` và không commit `.env.local`.
+* **Khởi chạy Gateway độc lập (nếu muốn chạy gateway local thay vì Cloud):**
+  ```powershell
+  npm --prefix gateway run dev
+  ```
 
-## Database và Supabase
+---
 
-Để sử dụng một project Supabase mới:
+## 🧪 Hệ Thống Kiểm Thử Tự Động (Empirical Test Suites)
+
+Dự án trang bị hệ thống kiểm thử tự động toàn diện, không phỏng đoán, đảm bảo chất lượng kỹ thuật cao nhất:
 
 ```powershell
-npx supabase login
-npx supabase link --project-ref YOUR_PROJECT_REF
-npm run db:migrate
-npm run db:types
+# 1. Kiểm tra toàn bộ kiểu dữ liệu TypeScript (0 lỗi)
+npm run typecheck
+
+# 2. Kiểm thử bảo mật RLS và Database Engine (232 assertions PGlite)
+npm run test:db
+
+# 3. Kiểm thử giao diện và hành vi tương tác Vitest (101 unit tests)
+npm test
+
+# 4. Kiểm thử bảo mật và giao thức mạng Gateway RFC 6455 (11 tests)
+node gateway/test/gateway-e2e.test.mjs
+
+# 5. Kiểm thử rò rỉ khóa bí mật trong gói bundle (Secret Scanner)
+npm run test:secrets
+
+# 6. Kiểm thử kết nối thời gian thực 2 chiều giữa 2 user trên VPS Oracle Cloud
+node scripts/test-live-gateway-chat.mjs
 ```
 
-Sau khi migrate, cần cấu hình trong Supabase:
+---
 
-- Auth redirect URL cho `/auth/callback`.
-- Email confirmation và password tối thiểu 10 ký tự.
-- Realtime private channels; tắt public access nếu không cần.
-- SMTP riêng trước khi triển khai cho người dùng thật.
-
-Chi tiết xem [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) và [docs/SMTP.md](docs/SMTP.md).
-
-## Kiến trúc thư mục
+## 📂 Cấu Trúc Thư Mục
 
 ```text
-src/app/                  Các route và page của Next.js
-src/components/           Thành phần giao diện chat, channel, settings
-src/context/              State và action chính của ứng dụng
-src/services/             Message, media, storage, workspace, realtime
-src/lib/supabase/         Supabase client phía browser/server
-gateway/                  ChatFlow Realtime Gateway (Node.js, WebSocket)
-electron/                 ChatFlow Desktop Client (Electron)
-src/types/                Kiểu dữ liệu ứng dụng và database
-supabase/migrations/      Migration PostgreSQL, RPC, RLS, Storage
-scripts/                  Script kiểm thử và kiểm tra cloud
-docs/                     Tài liệu API, triển khai và xác minh
+├── .github/workflows/       CI/CD GitHub Actions đóng gói Windows .exe tự động
+├── docs/                    Tài liệu kỹ thuật từ A-Z
+│   ├── TECHNICAL_DOCUMENTATION.md  Đặc tả giao thức mạng, RFC 6455, luồng tin nhắn
+│   ├── API.md               Hợp đồng API và quyền RLS
+│   ├── DEPLOYMENT.md        Hướng dẫn triển khai production
+│   └── VERIFICATION.md      Báo cáo kiểm thử và bảo mật
+├── electron/                Source code ứng dụng Electron Desktop (.exe)
+├── gateway/                 Máy chủ ChatFlow Gateway RFC 6455 (node:net, node:http)
+│   ├── src/                 Socket engine, WebSocket Frame Codec, Rate Limiter
+│   └── test/                Bộ kiểm thử E2E Gateway & Security Guards
+├── scripts/                 Các kịch bản kiểm thử mạng, database và cloud
+├── src/
+│   ├── app/                 Next.js App Router (Layouts, Pages, Routes)
+│   ├── components/          Giao diện người dùng Chat, Channel, Settings, Media
+│   ├── context/             ChatFlow Context Provider quản lý state thời gian thực
+│   ├── services/            Tầng dịch vụ (messages, storage, realtime, workspace)
+│   └── lib/                 Supabase client, theme tokens
+└── supabase/migrations/     10 file migrations SQL (Schema, RLS, Trigger, RPC)
 ```
 
-Ứng dụng sử dụng Supabase PostgreSQL kết hợp ChatFlow Realtime Gateway cho kiến trúc microservices phân tán và đồng bộ thời gian thực bảo mật cao.
+---
 
-## Luồng gửi tin nhắn
-
-1. Client tạo message optimistic để giao diện phản hồi ngay.
-2. File được upload trước khi gửi với giới hạn tối đa hai upload đồng thời.
-3. RPC `send_message` kiểm tra membership, block, rate limit, attachment và idempotency.
-4. Database ghi message bằng `client_message_id` để retry không tạo tin nhắn trùng.
-5. Realtime đồng bộ message tới các thành viên trong conversation.
-6. Client hydrate lại sender, attachment và reaction từ Supabase.
-
-## Giới hạn chính
-
-- Nội dung tin nhắn: tối đa 10.000 byte UTF-8.
-- Tối đa 5 file trong một tin nhắn.
-- Ảnh: tối đa 10 MB.
-- File khác: tối đa 25 MB.
-- Avatar: tối đa 2 MB.
-- Tối đa 20 upload chưa gắn vào tin nhắn mỗi người dùng.
-- Tối đa 1 GB dung lượng attachment đã khai báo mỗi người dùng.
-
-Database sử dụng RLS và các RPC có kiểm tra `auth.uid()`. Storage là private; URL tải file không chứa storage path và quyền truy cập được kiểm tra lại ở mỗi request.
-
-## Kiểm thử
-
-```powershell
-npm run typecheck
-npm run lint
-npm test
-npm run test:db
-npm run test:cloud
-npm run test:auth
-npm run build
-npm run test:secrets
-```
-
-`test:cloud` và `test:auth` cần cấu hình Supabase server key trong `.env.local`. Các script cloud tạo dữ liệu kiểm thử riêng và có lệnh cleanup:
-
-```powershell
-npm run test:cloud:cleanup
-```
-
-## Tài liệu liên quan
-
-- [API contract](docs/API.md)
-- [Deployment](docs/DEPLOYMENT.md)
-- [SMTP](docs/SMTP.md)
-- [Verification report](docs/VERIFICATION.md)
-- [Legacy API](docs/LEGACY_API.md)
+## 📜 Giấy Phép & Bản Quyền
+Đồ án thuộc môn **Lập Trình Mạng** — Được xây dựng phục vụ mục đích nghiên cứu học tập và đánh giá đồ án.
