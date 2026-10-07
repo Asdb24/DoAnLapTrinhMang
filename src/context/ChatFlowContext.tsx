@@ -227,12 +227,28 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
             id: a.id,
             name: a.name,
             size: `${(a.size / 1024).toFixed(1)} KB`,
-            type: (a.mimeType.startsWith('image/') ? 'image' : 'doc') as 'image' | 'doc',
+            type: (a.mimeType.startsWith('image/') ? 'image' : a.mimeType === 'application/pdf' ? 'pdf' : 'doc') as 'image' | 'pdf' | 'doc',
             url: a.url,
           })),
           media: gwMsg.media,
         };
         replaceMessages(id, [incomingMsg]);
+      }
+      const current = stateRef.current;
+      if (current) {
+        const isCurrentActive = activeRef.current === gwMsg.roomId;
+        const updated = current.conversations.map(conv => {
+          if (conv.id === gwMsg.roomId) {
+            return {
+              ...conv,
+              lastMessage: gwMsg.content,
+              lastMessageTime: new Date(gwMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              unreadCount: isCurrentActive ? conv.unreadCount : (conv.unreadCount + 1),
+            };
+          }
+          return conv;
+        });
+        apply({ ...current, conversations: updated });
       }
     });
 
@@ -296,19 +312,6 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
       const now=new Date();
       const optimistic:MessageType={id:`pending:${clientId}`,clientMessageId:clientId,senderId:current.id,senderName:stateRef.current?.settings.displayName||'You',content,attachments,media,createdAt:now.toISOString(),timestamp:now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),date:now.toLocaleDateString(),isSentByMe:true,status:'sending'};
       replaceMessages(id,[optimistic]);
-      gatewayClient.sendChatMessage(
-        id,
-        content,
-        clientId,
-        attachments.map(a => ({
-          id: a.id || '',
-          name: a.name,
-          size: typeof a.size === 'string' ? parseFloat(a.size) * 1024 : 0,
-          mimeType: a.type === 'image' ? 'image/png' : 'application/octet-stream',
-          url: a.url || '',
-        })),
-        media
-      );
       let row:MessageRow;
       try {
         row=check(await getSupabase().rpc('send_message',{target_conversation:id,message_content:content,client_id:clientId,attachment_ids:attachments.map(a=>a.id!),message_media:media||null,used_emojis:usedEmojis(content)})) as unknown as MessageRow;
@@ -319,6 +322,21 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
         if(valid())replaceMessages(id,[{...optimistic,status:'failed'}]);
         throw cause;
       }
+      gatewayClient.sendChatMessage(
+        id,
+        content,
+        clientId,
+        attachments.map(a => ({
+          id: a.id || '',
+          name: a.name,
+          size: typeof a.size === 'string' ? parseFloat(a.size) * 1024 : 0,
+          mimeType: a.type === 'image' ? 'image/png' : a.type === 'pdf' ? 'application/pdf' : 'application/octet-stream',
+          url: a.url || '',
+        })),
+        media,
+        row.id,
+        row.created_at
+      );
       // RPC success is authoritative. An unrelated hydration/sidebar failure must not turn it into a failed send.
       if(valid())replaceMessages(id,[{...optimistic,id:row.id,createdAt:row.created_at||optimistic.createdAt,status:'sent'}]);
       void messagesById([row.id],id,current.id,metadata.current.find(c=>c.id===id)).then(messages=>{if(valid())replaceMessages(id,messages);}).catch(()=>{if(valid())report(new Error('Message sent. Some details could not be refreshed; reconnect to sync them.'));});

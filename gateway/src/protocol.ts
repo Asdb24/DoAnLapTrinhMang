@@ -74,6 +74,8 @@ export interface SendMsgPacket extends BasePacket {
   clientMsgId: string;
   roomId: string;
   content: string;
+  serverMsgId?: string;
+  createdAt?: string;
   attachments?: Array<{
     id: string;
     name: string;
