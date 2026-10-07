@@ -18,7 +18,7 @@ export async function uploadAttachment(file:File,conversationId:string):Promise<
     catch { throw new Error(`${result.error.message}. Cleanup could not finish; the abandoned upload will be retried on a later sign-in.`); }
     throw new Error(result.error.message);
   }
-  return {id:row.id,name:file.name,size:`${(file.size/1024).toFixed(1)} KB`,type:imageTypes.has(mime)?'image':mime==='application/pdf'?'pdf':'doc',url:`/api/attachments/${row.id}`};
+  return {id:row.id,name:file.name,size:`${(file.size/1024).toFixed(1)} KB`,type:imageTypes.has(mime)?'image':mime==='application/pdf'?'pdf':'doc',url:`/api/attachments/${row.id}`,mimeType:mime,bytes:file.size};
 }
 export async function discardAttachment(id:string) {
   const client=getSupabase();

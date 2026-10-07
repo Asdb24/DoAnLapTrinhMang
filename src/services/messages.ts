@@ -40,8 +40,8 @@ async function hydrate(rows:MessageRow[],userId:string,metadata?:ConversationMet
     const read=metadata?.members.some(member=>member.user_id!==userId && member.last_read_at && (member.last_read_at>row.created_at || member.last_read_at===row.created_at && (member.last_read_message_id||'')>=row.id));
     return {id:row.id,createdAt:row.created_at,clientMessageId:row.client_message_id,senderId:row.sender_id||'',senderName:sender?.display_name||'Deleted user',senderAvatar:avatarUrl(sender?.avatar_url||''),content:row.deleted_at?'Message deleted':row.content,media:row.deleted_at?null:row.media as ChatMedia|null,
       timestamp:new Date(row.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),date:new Date(row.created_at).toLocaleDateString(),isSentByMe,status:isSentByMe?(read?'read':'sent'):'read',
-      isDeleted:Boolean(row.deleted_at),isEdited:Boolean(row.updated_at && row.created_at && row.updated_at !== row.created_at),
-      reactions:row.deleted_at?[]:[...grouped.values()],attachments:row.deleted_at?[]:files.filter(file=>file.message_id===row.id).map(file=>({id:file.id,name:file.file_name,size:`${(file.file_size/1024).toFixed(1)} KB`,type:file.mime_type.startsWith('image/')?'image':file.mime_type==='application/pdf'?'pdf':'doc',url:`/api/attachments/${file.id}`}))};
+      isDeleted:Boolean(row.deleted_at),isEdited:Boolean(row.edited_at || (row.updated_at && row.created_at && row.updated_at !== row.created_at && !row.deleted_at)),
+      reactions:row.deleted_at?[]:[...grouped.values()],attachments:row.deleted_at?[]:files.filter(file=>file.message_id===row.id).map(file=>({id:file.id,name:file.file_name,size:`${(file.file_size/1024).toFixed(1)} KB`,type:file.mime_type.startsWith('image/')?'image':file.mime_type==='application/pdf'?'pdf':'doc',url:`/api/attachments/${file.id}`,mimeType:file.mime_type,bytes:file.file_size}))};
   });
 }
 export async function messagePage(conversationId:string,userId:string,options:{before?:Cursor;after?:Cursor;metadata?:ConversationMetadata}={}) {

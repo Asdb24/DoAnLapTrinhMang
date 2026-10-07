@@ -329,8 +329,8 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
         attachments.map(a => ({
           id: a.id || '',
           name: a.name,
-          size: typeof a.size === 'string' ? parseFloat(a.size) * 1024 : 0,
-          mimeType: a.type === 'image' ? 'image/png' : a.type === 'pdf' ? 'application/pdf' : 'application/octet-stream',
+          size: typeof a.bytes === 'number' ? a.bytes : (typeof a.size === 'string' ? parseFloat(a.size) * 1024 : 0),
+          mimeType: a.mimeType || (a.type === 'image' ? 'image/png' : a.type === 'pdf' ? 'application/pdf' : 'application/octet-stream'),
           url: a.url || '',
         })),
         media,
@@ -362,19 +362,19 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
     blockUser:id=>mutation(async()=>check(await getSupabase().rpc('set_blocked',{target_user:id,blocked:true}))),
     unblockUser:id=>mutation(async()=>check(await getSupabase().rpc('set_blocked',{target_user:id,blocked:false}))),
     deleteMessage:async(convId,messageId)=>(await run(async()=>{
+      check(await getSupabase().rpc('delete_message',{target_message:messageId}));
       gatewayClient.deleteMessage(convId,messageId);
       const currentMsgs=stateRef.current?.conversations.find(c=>c.id===convId)?.messages||[];
       const target=currentMsgs.find(m=>m.id===messageId);
       if(target)replaceMessages(convId,[{...target,isDeleted:true,content:'Message deleted',attachments:[],media:null,reactions:[]}]);
-      try{check(await getSupabase().rpc('delete_message',{target_message:messageId}));}catch(e){console.warn('delete_message RPC fallback:',e);}
       return true;
     }))??false,
     editMessage:async(convId,messageId,newContent)=>(await run(async()=>{
+      check(await getSupabase().rpc('edit_message',{target_message:messageId,new_content:newContent}));
       gatewayClient.editMessage(convId,messageId,newContent);
       const currentMsgs=stateRef.current?.conversations.find(c=>c.id===convId)?.messages||[];
       const target=currentMsgs.find(m=>m.id===messageId);
       if(target)replaceMessages(convId,[{...target,content:newContent,isEdited:true}]);
-      try{check(await getSupabase().rpc('edit_message',{target_message:messageId,new_content:newContent}));}catch(e){console.warn('edit_message RPC fallback:',e);}
       return true;
     }))??false,
     clearAllChatHistory:()=>mutation(async()=>{check(await getSupabase().rpc('clear_my_history'));activeEpoch.current++;clearGeneration.current++;const current=stateRef.current;if(current)apply({...current,conversations:current.conversations.map(c=>({...c,messages:[]}))});setHasOlder(false);readPending.current.clear();setHistoryVersion(value=>value+1);}),
