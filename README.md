@@ -86,6 +86,102 @@ Hệ thống đã có sẵn tài khoản thật trên máy chủ Cloud để gi�
 
 👉 **[docs/TECHNICAL_DOCUMENTATION.md](docs/TECHNICAL_DOCUMENTATION.md)**
 
+## 🔄 Sơ Đồ Luồng Hoạt Động Hệ Thống (Mermaid Diagrams)
+
+### 1. Luồng Bắt Tay Kết Nối & Xác Thực (Handshake & Authentication Flow)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Client (Web / Desktop App)
+    participant GW as Oracle Cloud VPS Gateway
+    participant Auth as Supabase Auth (GoTrue)
+
+    Client->>GW: 1. HTTP GET / (Upgrade: websocket, Sec-WebSocket-Key)
+    Note over GW: Tính Sec-WebSocket-Accept = Base64(SHA1(Key + WS_GUID))
+    GW-->>Client: 2. HTTP 101 Switching Protocols (Connection: Upgrade)
+    Note over Client,GW: Nâng cấp kết nối thành kênh TCP RFC 6455 hai chiều
+    Client->>GW: 3. Gửi Frame TEXT HELLO { userId, displayName, token: HS256_JWT }
+    GW->>Auth: 4. Kiểm tra chữ ký HS256 JWT hoặc xác thực token
+    Auth-->>GW: 5. Token hợp lệ (valid: true, userId: verified_uid)
+    GW-->>Client: 6. Gửi Frame TEXT WELCOME { sessionId, heartbeatIntervalMs: 25000 }
+```
+
+---
+
+### 2. Luồng Gửi & Đồng Bộ Tin Nhắn Thời Gian Thực (Authoritative Message Flow)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Alice as Alice (Client A)
+    participant CtxA as Alice ChatFlowContext
+    participant DB as PostgreSQL (Supabase RPC)
+    participant GW as Oracle Cloud Gateway
+    participant CtxB as Bob ChatFlowContext
+    actor Bob as Bob (Client B)
+
+    Alice->>CtxA: 1. Nhập "Hello Bob" & bấm Gửi
+    CtxA->>CtxA: 2. Tạo tin nhắn Optimistic UI (status: 'sending')
+    CtxA->>DB: 3. rpc('send_message', { target_conversation, message_content, client_id })
+    Note over DB: PostgreSQL Transaction:<br/>- Xác thực auth.uid()<br/>- Kiểm tra membership & blocked<br/>- Kiểm tra rate limit DB<br/>- Cấp phát UUID v4 chính thức<br/>- Ghi nhận clock_timestamp()
+    DB-->>CtxA: 4. Trả về Row chính thức { id: 'msg-real-uuid', created_at }
+    CtxA->>CtxA: 5. Cập nhật Optimistic message: status: 'sent', id: 'msg-real-uuid'
+    CtxA->>GW: 6. Gửi WebSocket Frame SEND_MSG { serverMsgId: 'msg-real-uuid', roomId, content }
+    Note over GW: Gateway xác thực Alice trong roomId,<br/>lưu quyền sở hữu tin nhắn
+    GW-->>CtxA: 7. Gửi MSG_ACK
+    GW->>CtxB: 8. Broadcast NEW_MSG { id: 'msg-real-uuid', content, senderName: 'Alice' }
+    CtxB->>Bob: 9. Hiển thị tin nhắn tức thì trên màn hình Bob
+```
+
+---
+
+### 3. Luồng Sửa & Xóa / Thu Hồi Tin Nhắn (Edit & Delete/Revoke Message Flow)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Alice as Alice
+    participant CtxA as Alice ChatFlowContext
+    participant DB as PostgreSQL RPC (delete_message)
+    participant GW as Oracle Cloud Gateway
+    participant CtxB as Bob ChatFlowContext
+    actor Bob as Bob
+
+    Alice->>CtxA: 1. Nhấn nút "Delete Message" (messageId)
+    CtxA->>DB: 2. rpc('delete_message', { target_message: messageId })
+    Note over DB: PostgreSQL Transaction:<br/>- Khóa dòng tin nhắn FOR UPDATE<br/>- Kiểm tra m.sender_id == auth.uid()<br/>- SET deleted_at = clock_timestamp()
+    DB-->>CtxA: 3. Trả về 200 OK
+    CtxA->>GW: 4. Gửi frame DELETE_MSG { messageId, roomId }
+    Note over GW: Gateway kiểm tra quyền sở hữu<br/>Broadcast MSG_DELETED tới room
+    GW->>CtxB: 5. Gửi frame MSG_DELETED { messageId }
+    CtxA->>Alice: 6. Cập nhật UI: 'Message deleted', isDeleted: true
+    CtxB->>Bob: 7. Cập nhật UI tức thì: 'Message deleted', isDeleted: true
+    Note over Bob: Khi Bob F5 tải lại trang, hàm hydrate()<br/>thấy deleted_at != null sẽ tự che nội dung thành<br/>"Message deleted" (Zero Leakage)
+```
+
+---
+
+### 4. Luồng Truyền Tệp Đính Kèm Phân Đoạn (Chunked Binary Streaming Flow)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Client tải file
+    participant GW as Oracle Cloud Gateway
+    participant Disk as Gateway File System (/uploads)
+    actor Receiver as Người nhận
+
+    Client->>GW: 1. FILE_START { fileId, fileName, fileSize, totalChunks }
+    GW-->>Client: 2. FILE_ACK { fileId, status: 'ready' }
+    loop Từng chunk 64 KB
+        Client->>GW: 3. FILE_CHUNK { fileId, chunkIndex, dataBase64 }
+        Note over GW: Ghi chunk vào bộ nhớ đệm
+        GW-->>Client: 4. FILE_ACK { fileId, chunkIndex, status: 'received' }
+    end
+    Client->>GW: 5. FILE_COMPLETE { fileId }
+    Note over GW,Disk: Ghép nối toàn bộ chunks thành file hoàn chỉnh vào ổ đĩa
+    GW-->>Client: 6. FILE_COMPLETE_ACK { fileId, downloadUrl: '/uploads/:fileId/:fileName' }
+    Receiver->>GW: 7. HTTP GET /uploads/:fileId/:fileName
+    GW-->>Receiver: 8. HTTP Stream 200 OK (Stream nhị phân về Client)
+```
+
 ---
 
 ## 💻 Cài Đặt Và Chạy Local
