@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatFlow</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #090d16;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100vw;
+      user-select: none;
+      overflow: hidden;
+    }
+    .logo-container {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .logo-glow {
+      position: absolute;
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.45) 0%, rgba(99, 102, 241, 0) 70%);
+      animation: pulse 2.4s infinite ease-in-out;
+    }
+    .logo-icon {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(135deg, #6366f1 0%, #3b82f6 50%, #06b6d4 100%);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 32px rgba(99, 102, 241, 0.35);
+    }
+    .logo-icon svg {
+      width: 32px;
+      height: 32px;
+      fill: none;
+      stroke: #ffffff;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+      color: #ffffff;
+    }
+    .status-text {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 28px;
+    }
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2.5px solid rgba(148, 163, 184, 0.2);
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    .error-box {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 12px;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      max-width: 360px;
+      text-align: center;
+    }
+    .error-box p {
+      font-size: 13px;
+      color: #fca5a5;
+      margin-bottom: 12px;
+    }
+    .retry-btn {
+      background: #4f46e5;
+      color: #ffffff;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .retry-btn:hover {
+      background: #4338ca;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(0.9); opacity: 0.5; }
+      50% { transform: scale(1.2); opacity: 0.9; }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="logo-container">
+    <div class="logo-glow"></div>
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+    </div>
+  </div>
+  <h1>ChatFlow</h1>
+  <p id="status" class="status-text">Starting workspace...</p>
+  <div id="spinner" class="spinner"></div>
+  <div id="error-box" class="error-box">
+    <p id="error-msg">Local server taking longer than expected to start.</p>
+    <button class="retry-btn" onclick="retry()">Retry Connection</button>
+  </div>
+
+  <script>
+    function setError(msg) {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('status').style.display = 'none';
+      const box = document.getElementById('error-box');
+      box.style.display = 'flex';
+      if (msg) document.getElementById('error-msg').textContent = msg;
+    }
+
+    function retry() {
+      document.getElementById('error-box').style.display = 'none';
+      document.getElementById('spinner').style.display = 'block';
+      document.getElementById('status').style.display = 'block';
+      document.getElementById('status').textContent = 'Retrying connection...';
+      if (window.electronAPI && window.electronAPI.retryConnection) {
+        window.electronAPI.retryConnection();
+      } else {
+        window.location.reload();
+      }
+    }
+
+    if (window.electronAPI && window.electronAPI.onLoadingError) {
+      window.electronAPI.onLoadingError((msg) => setError(msg));
+    }
+  </script>
+</body>
+</html>

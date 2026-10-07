@@ -11,6 +11,10 @@
     "public/**/*",
     "package.json"
   ],
+  "asar": true,
+  "asarUnpack": [
+    ".next/standalone/**/*"
+  ],
   "extraMetadata": {
     "main": "electron/main.cjs"
   },
