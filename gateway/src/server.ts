@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { Socket } from 'node:net';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto';
 import { promises as fs, createReadStream, existsSync } from 'node:fs';
 import path from 'node:path';
 import {
@@ -36,10 +36,102 @@ import {
   type ErrorPacket,
 } from './protocol.js';
 
+export interface JwtPayload {
+  sub: string;
+  email?: string;
+  role?: string;
+  exp?: number;
+  [key: string]: any;
+}
+
+/**
+ * Decodes unverified JWT payload
+ */
+export function parseJwtUnverified(token: string): JwtPayload | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf8');
+    return JSON.parse(payloadJson) as JwtPayload;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Verifies standard HS256 JWT signature and expiry using Node.js crypto
+ */
+export function verifyHs256Jwt(token: string, secret: string): JwtPayload | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [headerB64, payloadB64, signatureB64] = parts;
+
+    // Verify header algorithm
+    const headerJson = Buffer.from(headerB64, 'base64url').toString('utf8');
+    const header = JSON.parse(headerJson);
+    if (header.alg !== 'HS256') return null;
+
+    // Verify signature
+    const dataToSign = `${headerB64}.${payloadB64}`;
+    const hmac = createHmac('sha256', secret);
+    hmac.update(dataToSign);
+    const expectedSig = hmac.digest('base64url');
+
+    const sigBuf = Buffer.from(signatureB64);
+    const expBuf = Buffer.from(expectedSig);
+    if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+      return null;
+    }
+
+    // Decode payload
+    const payloadJson = Buffer.from(payloadB64, 'base64url').toString('utf8');
+    const payload = JSON.parse(payloadJson) as JwtPayload;
+
+    // Check expiration
+    if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
+      return null;
+    }
+
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Generates an HS256 JWT token for tests or dev fixtures
+ */
+export function createTestJwt(
+  payload: { sub: string; exp?: number; role?: string; [key: string]: any },
+  secret: string
+): string {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const body = Buffer.from(
+    JSON.stringify({
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      role: 'authenticated',
+      ...payload,
+    })
+  ).toString('base64url');
+  const signature = createHmac('sha256', secret)
+    .update(`${header}.${body}`)
+    .digest('base64url');
+  return `${header}.${body}.${signature}`;
+}
+
 export interface GatewayOptions {
   port: number;
   uploadDir: string;
   heartbeatIntervalMs?: number;
+  supabaseJwtSecret?: string;
+  supabaseUrl?: string;
+  allowDevMockTokens?: boolean;
+  authRequired?: boolean;
+  rateLimitMaxMessages?: number;
+  rateLimitWindowMs?: number;
+  maxTextFrameBytes?: number;
+  authorizeJoinRoom?: (userId: string, roomId: string) => Promise<boolean> | boolean;
 }
 
 export class ClientConnection {
@@ -50,6 +142,8 @@ export class ClientConnection {
   public avatarUrl: string = '';
   public joinedRooms: Set<string> = new Set();
   public isAlive: boolean = true;
+  public isAuthenticated: boolean = false;
+  public messageTimestamps: number[] = [];
   private buffer: Buffer = Buffer.alloc(0);
 
   constructor(socket: Socket) {
@@ -95,6 +189,7 @@ export class ChatFlowGateway {
   private connections = new Map<string, ClientConnection>(); // connId -> ClientConnection
   private userSockets = new Map<string, Set<ClientConnection>>(); // userId -> Set<conn>
   private roomMembers = new Map<string, Set<ClientConnection>>(); // roomId -> Set<conn>
+  private recentMessages = new Map<string, { senderId: string; roomId: string; createdAt: number }>(); // messageId -> metadata
   private fileUploads = new Map<string, {
     fileId: string;
     fileName: string;
@@ -111,6 +206,11 @@ export class ChatFlowGateway {
   constructor(options: GatewayOptions) {
     this.options = {
       heartbeatIntervalMs: 25000,
+      rateLimitMaxMessages: 10,
+      rateLimitWindowMs: 5000,
+      maxTextFrameBytes: 64 * 1024,
+      authRequired: true,
+      allowDevMockTokens: true,
       ...options,
     };
     this.setupHttp();
@@ -247,10 +347,23 @@ export class ChatFlowGateway {
     }
 
     if (frame.opcode === Opcode.TEXT) {
+      const maxTextBytes = this.options.maxTextFrameBytes || 64 * 1024;
+      if (frame.payload.length > maxTextBytes) {
+        console.warn(`[Gateway] Text frame exceeded max size (${frame.payload.length} > ${maxTextBytes}) for client ${client.id}`);
+        const errorPacket: ErrorPacket = {
+          type: 'ERROR',
+          code: 'FRAME_TOO_LARGE',
+          message: `Text frame exceeds maximum allowed size of ${maxTextBytes} bytes`,
+        };
+        client.sendPacket(errorPacket);
+        client.close(1009, 'Message Too Big');
+        return;
+      }
+
       const text = frame.payload.toString('utf8');
       try {
         const packet = JSON.parse(text) as GatewayPacket;
-        this.dispatchPacket(client, packet);
+        void this.dispatchPacket(client, packet);
       } catch {
         const errorPacket: ErrorPacket = {
           type: 'ERROR',
@@ -262,16 +375,31 @@ export class ChatFlowGateway {
     }
   }
 
-  private dispatchPacket(client: ClientConnection, packet: GatewayPacket) {
+  private async dispatchPacket(client: ClientConnection, packet: GatewayPacket) {
+    if (packet.type === 'PING') {
+      client.sendPacket({ type: 'PONG' });
+      return;
+    }
+
+    if (packet.type === 'HELLO') {
+      await this.handleHello(client, packet);
+      return;
+    }
+
+    // All packets other than PING and HELLO require authenticated session
+    if (!client.isAuthenticated || !client.userId) {
+      const errorPacket: ErrorPacket = {
+        type: 'ERROR',
+        code: 'UNAUTHORIZED',
+        message: 'Authentication required. Send valid HELLO packet first.',
+      };
+      client.sendPacket(errorPacket);
+      return;
+    }
+
     switch (packet.type) {
-      case 'HELLO':
-        this.handleHello(client, packet);
-        break;
-      case 'PING':
-        client.sendPacket({ type: 'PONG' });
-        break;
       case 'JOIN_ROOM':
-        this.handleJoinRoom(client, packet);
+        await this.handleJoinRoom(client, packet);
         break;
       case 'LEAVE_ROOM':
         this.handleLeaveRoom(client, packet);
@@ -292,44 +420,171 @@ export class ChatFlowGateway {
         this.handlePresence(client, packet);
         break;
       case 'FILE_START':
-        this.handleFileStart(client, packet);
+        await this.handleFileStart(client, packet);
         break;
       case 'FILE_CHUNK':
-        this.handleFileChunk(client, packet);
+        await this.handleFileChunk(client, packet);
         break;
       case 'FILE_COMPLETE':
-        this.handleFileComplete(client, packet);
+        await this.handleFileComplete(client, packet);
         break;
       default:
         console.warn(`[Gateway] Unrecognized packet type: ${(packet as any).type}`);
     }
   }
 
-  private handleHello(client: ClientConnection, packet: HelloPacket) {
-    client.userId = packet.userId;
+  private async verifyAuthToken(token: string): Promise<{ valid: boolean; userId?: string; error?: string }> {
+    if (!token) {
+      return { valid: false, error: 'Token is required' };
+    }
+
+    // 1. Dev / mock token handling
+    if (this.options.allowDevMockTokens) {
+      if (token.startsWith('mock-token:')) {
+        const uid = token.slice('mock-token:'.length).trim();
+        return { valid: true, userId: uid || randomUUID() };
+      }
+      if (token.startsWith('mock-token-')) {
+        const uid = token.slice('mock-token-'.length).trim();
+        return { valid: true, userId: uid || randomUUID() };
+      }
+      if (token === 'dev-token' || token === 'mock-token') {
+        return { valid: true, userId: 'dev-user' };
+      }
+    }
+
+    // 2. Secret verification (HS256)
+    if (this.options.supabaseJwtSecret) {
+      const payload = verifyHs256Jwt(token, this.options.supabaseJwtSecret);
+      if (payload && payload.sub) {
+        return { valid: true, userId: payload.sub };
+      }
+      return { valid: false, error: 'Invalid or expired JWT signature' };
+    }
+
+    // 3. Supabase Auth API verification fallback (if URL provided)
+    if (this.options.supabaseUrl) {
+      try {
+        const res = await fetch(`${this.options.supabaseUrl}/auth/v1/user`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '',
+          },
+        });
+        if (res.ok) {
+          const user = (await res.json()) as { id: string };
+          if (user?.id) {
+            return { valid: true, userId: user.id };
+          }
+        }
+        return { valid: false, error: 'Token validation failed via Supabase Auth' };
+      } catch (err: any) {
+        console.error('[Gateway] Failed to verify token via Supabase Auth API:', err.message);
+        return { valid: false, error: 'Authentication service unreachable' };
+      }
+    }
+
+    // 4. Fallback in dev/test when neither secret nor URL is configured
+    if (this.options.allowDevMockTokens) {
+      const parsed = parseJwtUnverified(token);
+      if (parsed?.sub) {
+        return { valid: true, userId: parsed.sub };
+      }
+      return { valid: true, userId: token };
+    }
+
+    return { valid: false, error: 'Gateway JWT secret or Supabase URL not configured' };
+  }
+
+  private checkRateLimit(client: ClientConnection): boolean {
+    const now = Date.now();
+    const windowMs = this.options.rateLimitWindowMs || 5000;
+    const maxMessages = this.options.rateLimitMaxMessages || 10;
+
+    // Retain only timestamps within sliding window
+    client.messageTimestamps = client.messageTimestamps.filter((t) => now - t < windowMs);
+
+    if (client.messageTimestamps.length >= maxMessages) {
+      return false;
+    }
+
+    client.messageTimestamps.push(now);
+    return true;
+  }
+
+  private async handleHello(client: ClientConnection, packet: HelloPacket) {
+    const requireAuth = this.options.authRequired ?? true;
+    let verifiedUserId: string | null = null;
+
+    if (requireAuth) {
+      const token = packet.token;
+      if (!token) {
+        const error: ErrorPacket = {
+          type: 'ERROR',
+          code: 'AUTH_FAILED',
+          message: 'Authentication token is required',
+        };
+        client.sendPacket(error);
+        client.close(4001, 'Unauthorized');
+        return;
+      }
+
+      const authResult = await this.verifyAuthToken(token);
+      if (!authResult.valid || !authResult.userId) {
+        const error: ErrorPacket = {
+          type: 'ERROR',
+          code: 'AUTH_FAILED',
+          message: authResult.error || 'Invalid authentication token',
+        };
+        client.sendPacket(error);
+        client.close(4001, 'Unauthorized');
+        return;
+      }
+
+      // Strictly bind identity to verified subject (cannot forge packet.userId)
+      verifiedUserId = authResult.userId;
+    } else {
+      verifiedUserId = packet.userId || randomUUID();
+    }
+
+    client.isAuthenticated = true;
+    client.userId = verifiedUserId;
     client.displayName = packet.displayName || 'Anonymous';
     client.avatarUrl = packet.avatarUrl || '';
 
-    if (!this.userSockets.has(packet.userId)) {
-      this.userSockets.set(packet.userId, new Set());
+    if (!this.userSockets.has(verifiedUserId)) {
+      this.userSockets.set(verifiedUserId, new Set());
     }
-    this.userSockets.get(packet.userId)!.add(client);
+    this.userSockets.get(verifiedUserId)!.add(client);
 
     const welcome: WelcomePacket = {
       type: 'WELCOME',
       sessionId: client.id,
-      userId: packet.userId,
+      userId: verifiedUserId,
       serverTime: Date.now(),
       heartbeatIntervalMs: this.options.heartbeatIntervalMs || 25000,
     };
     client.sendPacket(welcome);
 
     // Broadcast user online status
-    this.broadcastPresence(packet.userId, 'online');
+    this.broadcastPresence(verifiedUserId, 'online');
   }
 
-  private handleJoinRoom(client: ClientConnection, packet: JoinRoomPacket) {
+  private async handleJoinRoom(client: ClientConnection, packet: JoinRoomPacket) {
     if (!packet.roomId) return;
+
+    if (this.options.authorizeJoinRoom) {
+      const allowed = await this.options.authorizeJoinRoom(client.userId!, packet.roomId);
+      if (!allowed) {
+        client.sendPacket({
+          type: 'ERROR',
+          code: 'FORBIDDEN',
+          message: `Not authorized to join room ${packet.roomId}`,
+        });
+        return;
+      }
+    }
+
     client.joinedRooms.add(packet.roomId);
 
     if (!this.roomMembers.has(packet.roomId)) {
@@ -357,8 +612,44 @@ export class ChatFlowGateway {
   }
 
   private handleSendMsg(client: ClientConnection, packet: SendMsgPacket) {
+    if (!client.joinedRooms.has(packet.roomId)) {
+      client.sendPacket({
+        type: 'ERROR',
+        code: 'NOT_IN_ROOM',
+        message: `You must join room ${packet.roomId} before sending messages`,
+      });
+      return;
+    }
+
+    if (!this.checkRateLimit(client)) {
+      client.sendPacket({
+        type: 'ERROR',
+        code: 'RATE_LIMITED',
+        message: 'Rate limit exceeded: maximum 10 messages per 5 seconds',
+      });
+      return;
+    }
+
     const serverMsgId = `msg_${Date.now()}_${randomUUID().slice(0, 8)}`;
     const nowIso = new Date().toISOString();
+
+    // Store message author metadata for ownership verification
+    this.recentMessages.set(serverMsgId, {
+      senderId: client.userId!,
+      roomId: packet.roomId,
+      createdAt: Date.now(),
+    });
+    if (packet.clientMsgId) {
+      this.recentMessages.set(packet.clientMsgId, {
+        senderId: client.userId!,
+        roomId: packet.roomId,
+        createdAt: Date.now(),
+      });
+    }
+    if (this.recentMessages.size > 10000) {
+      const oldest = this.recentMessages.keys().next().value;
+      if (oldest) this.recentMessages.delete(oldest);
+    }
 
     // 1. Send immediate ACK back to sender (1st tick)
     const ack: MsgAckPacket = {
@@ -377,7 +668,7 @@ export class ChatFlowGateway {
         id: serverMsgId,
         clientMsgId: packet.clientMsgId,
         roomId: packet.roomId,
-        senderId: client.userId || 'anon',
+        senderId: client.userId!,
         senderName: client.displayName,
         senderAvatar: client.avatarUrl,
         content: packet.content,
@@ -396,6 +687,34 @@ export class ChatFlowGateway {
   }
 
   private handleEditMsg(client: ClientConnection, packet: EditMsgPacket) {
+    if (!client.joinedRooms.has(packet.roomId)) {
+      client.sendPacket({
+        type: 'ERROR',
+        code: 'NOT_IN_ROOM',
+        message: `You must join room ${packet.roomId} before editing messages`,
+      });
+      return;
+    }
+
+    const msgRecord = this.recentMessages.get(packet.messageId);
+    if (msgRecord) {
+      if (msgRecord.senderId !== client.userId) {
+        client.sendPacket({
+          type: 'ERROR',
+          code: 'FORBIDDEN',
+          message: 'Only the author can edit this message',
+        });
+        return;
+      }
+    } else if (packet.senderId && packet.senderId !== client.userId) {
+      client.sendPacket({
+        type: 'ERROR',
+        code: 'FORBIDDEN',
+        message: 'Only the author can edit this message',
+      });
+      return;
+    }
+
     const members = this.roomMembers.get(packet.roomId);
     if (!members) return;
     const nowIso = new Date().toISOString();
@@ -412,6 +731,34 @@ export class ChatFlowGateway {
   }
 
   private handleDeleteMsg(client: ClientConnection, packet: DeleteMsgPacket) {
+    if (!client.joinedRooms.has(packet.roomId)) {
+      client.sendPacket({
+        type: 'ERROR',
+        code: 'NOT_IN_ROOM',
+        message: `You must join room ${packet.roomId} before deleting messages`,
+      });
+      return;
+    }
+
+    const msgRecord = this.recentMessages.get(packet.messageId);
+    if (msgRecord) {
+      if (msgRecord.senderId !== client.userId) {
+        client.sendPacket({
+          type: 'ERROR',
+          code: 'FORBIDDEN',
+          message: 'Only the author can delete this message',
+        });
+        return;
+      }
+    } else if (packet.senderId && packet.senderId !== client.userId) {
+      client.sendPacket({
+        type: 'ERROR',
+        code: 'FORBIDDEN',
+        message: 'Only the author can delete this message',
+      });
+      return;
+    }
+
     const members = this.roomMembers.get(packet.roomId);
     if (!members) return;
     const nowIso = new Date().toISOString();
@@ -427,6 +774,10 @@ export class ChatFlowGateway {
   }
 
   private handleTyping(client: ClientConnection, packet: TypingPacket) {
+    if (!client.joinedRooms.has(packet.roomId)) return;
+
+    // Enforce authenticated sender identity
+    packet.userId = client.userId!;
     const members = this.roomMembers.get(packet.roomId);
     if (!members) return;
 

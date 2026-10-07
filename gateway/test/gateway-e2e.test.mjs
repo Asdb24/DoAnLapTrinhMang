@@ -4,7 +4,7 @@ import net from 'node:net';
 import http from 'node:http';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { ChatFlowGateway } from '../dist/server.js';
+import { ChatFlowGateway, createTestJwt } from '../dist/server.js';
 import {
   encodeFrame,
   parseFrames,
@@ -15,6 +15,7 @@ import {
 
 const TEST_PORT = 9876;
 const TEST_UPLOAD_DIR = path.join(process.cwd(), 'gateway', 'test-uploads');
+const TEST_JWT_SECRET = 'chatflow-super-secret-jwt-key-2026-secure';
 
 class TestClient {
   constructor(port) {
@@ -23,6 +24,7 @@ class TestClient {
     this.buffer = Buffer.alloc(0);
     this.receivedPackets = [];
     this.rawFrames = [];
+    this.closed = false;
   }
 
   async connect() {
@@ -49,6 +51,7 @@ class TestClient {
           if (res.includes('101 Switching Protocols') && res.includes(this.expectedAccept)) {
             this.socket.off('data', onHandshake);
             this.socket.on('data', (chunk) => this.onSocketData(chunk));
+            this.socket.on('close', () => { this.closed = true; });
             resolve();
           } else {
             reject(new Error('Handshake failed: ' + res));
@@ -87,11 +90,42 @@ class TestClient {
     let header;
     if (payload.length < 126) {
       header = Buffer.from([0x81, 0x80 | payload.length]);
-    } else {
+    } else if (payload.length <= 65535) {
       header = Buffer.alloc(4);
       header[0] = 0x81;
       header[1] = 0x80 | 126;
       header.writeUInt16BE(payload.length, 2);
+    } else {
+      header = Buffer.alloc(10);
+      header[0] = 0x81;
+      header[1] = 0x80 | 127;
+      header.writeBigUInt64BE(BigInt(payload.length), 2);
+    }
+
+    this.socket.write(Buffer.concat([header, maskKey, masked]));
+  }
+
+  sendRawMaskedText(text) {
+    const payload = Buffer.from(text, 'utf8');
+    const maskKey = Buffer.from([0x12, 0x34, 0x56, 0x78]);
+    const masked = Buffer.alloc(payload.length);
+    for (let i = 0; i < payload.length; i++) {
+      masked[i] = payload[i] ^ maskKey[i % 4];
+    }
+
+    let header;
+    if (payload.length < 126) {
+      header = Buffer.from([0x81, 0x80 | payload.length]);
+    } else if (payload.length <= 65535) {
+      header = Buffer.alloc(4);
+      header[0] = 0x81;
+      header[1] = 0x80 | 126;
+      header.writeUInt16BE(payload.length, 2);
+    } else {
+      header = Buffer.alloc(10);
+      header[0] = 0x81;
+      header[1] = 0x80 | 127;
+      header.writeBigUInt64BE(BigInt(payload.length), 2);
     }
 
     this.socket.write(Buffer.concat([header, maskKey, masked]));
@@ -113,17 +147,36 @@ class TestClient {
     throw new Error(`Timeout waiting for packet type: ${type}`);
   }
 
+  async waitForClose(timeoutMs = 3000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (this.closed || !this.socket || this.socket.destroyed) {
+        return true;
+      }
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    return false;
+  }
+
   close() {
-    this.socket?.end();
+    try {
+      this.socket?.end();
+    } catch {}
   }
 }
 
-test('ChatFlow Gateway End-to-End Test Suite', async (t) => {
+test('ChatFlow Gateway Security & End-to-End Test Suite', async (t) => {
   await fs.rm(TEST_UPLOAD_DIR, { recursive: true, force: true });
   const gateway = new ChatFlowGateway({
     port: TEST_PORT,
     uploadDir: TEST_UPLOAD_DIR,
     heartbeatIntervalMs: 50000,
+    supabaseJwtSecret: TEST_JWT_SECRET,
+    authRequired: true,
+    allowDevMockTokens: true,
+    rateLimitMaxMessages: 10,
+    rateLimitWindowMs: 2000,
+    maxTextFrameBytes: 64 * 1024,
   });
 
   await gateway.start();
@@ -141,28 +194,82 @@ test('ChatFlow Gateway End-to-End Test Suite', async (t) => {
     assert.equal(data.service, 'ChatFlow Gateway (RFC 6455)');
   });
 
+  await t.test('2. Security Guard: Reject unauthenticated packet before HELLO', async () => {
+    const clientUnauth = new TestClient(TEST_PORT);
+    await clientUnauth.connect();
+
+    // Attempt to send SEND_MSG without handshake
+    clientUnauth.sendMaskedPacket({
+      type: 'SEND_MSG',
+      clientMsgId: 'unauth_req',
+      roomId: 'room_secret',
+      content: 'Hacked message',
+    });
+
+    const err = await clientUnauth.waitForPacket('ERROR');
+    assert.equal(err.code, 'UNAUTHORIZED');
+    clientUnauth.close();
+  });
+
+  await t.test('3. Security Guard: Reject invalid JWT token on HELLO and close socket', async () => {
+    const clientBad = new TestClient(TEST_PORT);
+    await clientBad.connect();
+
+    clientBad.sendMaskedPacket({
+      type: 'HELLO',
+      userId: 'user_attacker',
+      displayName: 'Attacker',
+      token: 'invalid.jwt.token',
+    });
+
+    const err = await clientBad.waitForPacket('ERROR');
+    assert.equal(err.code, 'AUTH_FAILED');
+    const closed = await clientBad.waitForClose();
+    assert.ok(closed, 'Socket should be closed by gateway after auth failure');
+  });
+
+  await t.test('4. Security: Authenticate with valid HS256 JWT & prevent identity spoofing', async () => {
+    const clientA = new TestClient(TEST_PORT);
+    await clientA.connect();
+
+    const realAliceJwt = createTestJwt({ sub: 'user_alice_uuid' }, TEST_JWT_SECRET);
+
+    // Attacker tries to pretend to be 'user_admin' in packet.userId, but token is for 'user_alice_uuid'
+    clientA.sendMaskedPacket({
+      type: 'HELLO',
+      userId: 'user_admin_spoofed',
+      displayName: 'Alice Real',
+      token: realAliceJwt,
+    });
+
+    const welcome = await clientA.waitForPacket('WELCOME');
+    assert.equal(welcome.type, 'WELCOME');
+    // Bound strictly to verified token subject, spoofed userId ignored!
+    assert.equal(welcome.userId, 'user_alice_uuid');
+    clientA.close();
+  });
+
   const clientA = new TestClient(TEST_PORT);
   const clientB = new TestClient(TEST_PORT);
+  const aliceJwt = createTestJwt({ sub: 'user_a' }, TEST_JWT_SECRET);
+  const bobJwt = createTestJwt({ sub: 'user_b' }, TEST_JWT_SECRET);
 
-  await t.test('2. WebSocket RFC 6455 Handshake & HELLO/WELCOME', async () => {
+  await t.test('5. Clients connect with valid tokens, join room and exchange messages', async () => {
     await clientA.connect();
     clientA.sendMaskedPacket({
       type: 'HELLO',
       userId: 'user_a',
       displayName: 'Alice',
+      token: aliceJwt,
     });
+    await clientA.waitForPacket('WELCOME');
 
-    const welcome = await clientA.waitForPacket('WELCOME');
-    assert.equal(welcome.type, 'WELCOME');
-    assert.equal(welcome.userId, 'user_a');
-  });
-
-  await t.test('3. Client B connect, Join Room and 2-way message ACK', async () => {
     await clientB.connect();
     clientB.sendMaskedPacket({
       type: 'HELLO',
       userId: 'user_b',
       displayName: 'Bob',
+      token: bobJwt,
     });
     await clientB.waitForPacket('WELCOME');
 
@@ -190,10 +297,126 @@ test('ChatFlow Gateway End-to-End Test Suite', async (t) => {
     const newMsg = await clientB.waitForPacket('NEW_MSG');
     assert.equal(newMsg.msg.clientMsgId, 'req_12345');
     assert.equal(newMsg.msg.content, 'Hello Bob! This is Alice.');
-    assert.equal(newMsg.msg.senderName, 'Alice');
+    assert.equal(newMsg.msg.senderId, 'user_a');
   });
 
-  await t.test('4. Chunked file upload and HTTP download verification', async () => {
+  await t.test('6. Security Guard: Cannot send to room without joining', async () => {
+    clientA.sendMaskedPacket({
+      type: 'SEND_MSG',
+      clientMsgId: 'req_unjoined',
+      roomId: 'room_private_unjoined',
+      content: 'Sneaking message into unjoined room',
+    });
+
+    const err = await clientA.waitForPacket('ERROR');
+    assert.equal(err.code, 'NOT_IN_ROOM');
+  });
+
+  await t.test('7. Security Guard: Ownership verification on EDIT and DELETE message', async () => {
+    const roomId = 'room_general';
+
+    // Alice sends a new message
+    clientA.sendMaskedPacket({
+      type: 'SEND_MSG',
+      clientMsgId: 'req_alice_msg_1',
+      roomId,
+      content: 'Original message by Alice',
+    });
+    const ack = await clientA.waitForPacket('MSG_ACK');
+    const msgId = ack.serverMsgId;
+    await clientB.waitForPacket('NEW_MSG');
+
+    // ATTACK: Bob tries to EDIT Alice's message -> Must be rejected with FORBIDDEN!
+    clientB.sendMaskedPacket({
+      type: 'EDIT_MSG',
+      roomId,
+      messageId: msgId,
+      newContent: 'Tampered by Bob!',
+    });
+    const editErr = await clientB.waitForPacket('ERROR');
+    assert.equal(editErr.code, 'FORBIDDEN');
+
+    // ATTACK: Bob tries to DELETE Alice's message -> Must be rejected with FORBIDDEN!
+    clientB.sendMaskedPacket({
+      type: 'DELETE_MSG',
+      roomId,
+      messageId: msgId,
+    });
+    const deleteErr = await clientB.waitForPacket('ERROR');
+    assert.equal(deleteErr.code, 'FORBIDDEN');
+
+    // LEGITIMATE: Alice (author) edits her own message -> Succeeded!
+    clientA.sendMaskedPacket({
+      type: 'EDIT_MSG',
+      roomId,
+      messageId: msgId,
+      newContent: 'Edited legitimately by Alice',
+    });
+    const editBroadcast = await clientB.waitForPacket('MSG_EDITED');
+    assert.equal(editBroadcast.messageId, msgId);
+    assert.equal(editBroadcast.newContent, 'Edited legitimately by Alice');
+
+    // LEGITIMATE: Alice deletes her own message -> Succeeded!
+    clientA.sendMaskedPacket({
+      type: 'DELETE_MSG',
+      roomId,
+      messageId: msgId,
+    });
+    const deleteBroadcast = await clientB.waitForPacket('MSG_DELETED');
+    assert.equal(deleteBroadcast.messageId, msgId);
+  });
+
+  await t.test('8. Security Guard: Rate limiting drops flooding attempts', async () => {
+    const roomId = 'room_general';
+    let rateLimitEncountered = false;
+
+    // Send 15 messages in burst (limit is 10)
+    for (let i = 0; i < 15; i++) {
+      clientA.sendMaskedPacket({
+        type: 'SEND_MSG',
+        clientMsgId: `flood_${i}`,
+        roomId,
+        content: `Flood ${i}`,
+      });
+    }
+
+    // Expect at least one RATE_LIMITED error packet
+    try {
+      const err = await clientA.waitForPacket('ERROR', 1500);
+      if (err.code === 'RATE_LIMITED') {
+        rateLimitEncountered = true;
+      }
+    } catch {}
+
+    assert.ok(rateLimitEncountered, 'Gateway should enforce rate limiting on message floods');
+  });
+
+  await t.test('9. Security Guard: Frame size limit protects against oversized payloads', async () => {
+    const clientHuge = new TestClient(TEST_PORT);
+    await clientHuge.connect();
+    clientHuge.sendMaskedPacket({
+      type: 'HELLO',
+      userId: 'user_huge',
+      token: `mock-token:user_huge`,
+    });
+    await clientHuge.waitForPacket('WELCOME');
+
+    // Craft a frame payload > 64KB (e.g. 70KB)
+    const bigPayload = JSON.stringify({
+      type: 'SEND_MSG',
+      roomId: 'room_general',
+      content: 'A'.repeat(70 * 1024),
+    });
+
+    clientHuge.sendRawMaskedText(bigPayload);
+
+    const err = await clientHuge.waitForPacket('ERROR');
+    assert.equal(err.code, 'FRAME_TOO_LARGE');
+    const closed = await clientHuge.waitForClose();
+    assert.ok(closed, 'Oversized frame should close socket with code 1009');
+  });
+
+  await t.test('10. Chunked file upload and HTTP download verification', async () => {
     const fileContent = 'Part 1 binary payload. --- Part 2 binary payload with extra text!';
     const chunk1 = Buffer.from(fileContent.slice(0, 20)).toString('base64');
     const chunk2 = Buffer.from(fileContent.slice(20)).toString('base64');
@@ -248,33 +471,6 @@ test('ChatFlow Gateway End-to-End Test Suite', async (t) => {
     });
 
     assert.equal(downloadedText, fileContent);
-  });
-
-  await t.test('5. Edit and Delete message over gateway broadcast', async () => {
-    // Client A sends EDIT_MSG
-    clientA.sendMaskedPacket({
-      type: 'EDIT_MSG',
-      roomId: 'room_general',
-      messageId: 'msg_to_edit_123',
-      newContent: 'Updated content from client A',
-    });
-
-    // Client B receives MSG_EDITED
-    const editPacket = await clientB.waitForPacket('MSG_EDITED');
-    assert.equal(editPacket.messageId, 'msg_to_edit_123');
-    assert.equal(editPacket.newContent, 'Updated content from client A');
-
-    // Client A sends DELETE_MSG
-    clientA.sendMaskedPacket({
-      type: 'DELETE_MSG',
-      roomId: 'room_general',
-      messageId: 'msg_to_edit_123',
-    });
-
-    // Client B receives MSG_DELETED
-    const deletePacket = await clientB.waitForPacket('MSG_DELETED');
-    assert.equal(deletePacket.messageId, 'msg_to_edit_123');
-    assert.ok(deletePacket.deletedAt);
   });
 
   clientA.close();

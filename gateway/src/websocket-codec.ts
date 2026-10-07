@@ -75,8 +75,8 @@ export function parseFrames(buffer: Buffer): { frames: WebSocketFrame[]; remaini
     } else if (payloadLen === 127) {
       if (offset + 10 > buffer.length) break; // Need 8 more bytes for length
       const bigLen = buffer.readBigUInt64BE(offset + 2);
-      if (bigLen > BigInt(Number.MAX_SAFE_INTEGER)) {
-        throw new Error('Frame payload exceeds maximum safe integer length');
+      if (bigLen > BigInt(10 * 1024 * 1024)) {
+        throw new Error('Frame payload exceeds maximum safe length (10MB)');
       }
       payloadLen = Number(bigLen);
       headerLen += 8;
