@@ -173,7 +173,6 @@ test('ChatFlow Gateway Security & End-to-End Test Suite', async (t) => {
     heartbeatIntervalMs: 50000,
     supabaseJwtSecret: TEST_JWT_SECRET,
     authRequired: true,
-    allowDevMockTokens: true,
     rateLimitMaxMessages: 10,
     rateLimitWindowMs: 2000,
     maxTextFrameBytes: 64 * 1024,
@@ -394,10 +393,11 @@ test('ChatFlow Gateway Security & End-to-End Test Suite', async (t) => {
   await t.test('9. Security Guard: Frame size limit protects against oversized payloads', async () => {
     const clientHuge = new TestClient(TEST_PORT);
     await clientHuge.connect();
+    const tokenHuge = createTestJwt({ sub: 'user_huge' }, TEST_JWT_SECRET);
     clientHuge.sendMaskedPacket({
       type: 'HELLO',
       userId: 'user_huge',
-      token: `mock-token:user_huge`,
+      token: tokenHuge,
     });
     await clientHuge.waitForPacket('WELCOME');
 

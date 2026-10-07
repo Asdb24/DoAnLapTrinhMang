@@ -1,7 +1,23 @@
 // Script kiểm thử giao tiếp thời gian thực 2 chiều giữa 2 người dùng qua Cloud VPS Gateway (WSS)
-const GATEWAY_URL = 'wss://168-138-160-93.sslip.io';
+import crypto from 'node:crypto';
 
-console.log(`[TEST] Đang kết nối tới Gateway máy chủ Oracle Cloud: ${GATEWAY_URL}`);
+const GATEWAY_URL = process.env.GATEWAY_URL || 'wss://168-138-160-93.sslip.io';
+const JWT_SECRET = process.env.SUPABASE_JWT_SECRET || 'chatflow-super-secret-jwt-key-2026-secure';
+
+function makeJwt(userId, secret = JWT_SECRET) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const body = Buffer.from(
+    JSON.stringify({
+      sub: userId,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      role: 'authenticated',
+    })
+  ).toString('base64url');
+  const sig = crypto.createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url');
+  return `${header}.${body}.${sig}`;
+}
+
+console.log(`[TEST] Đang kết nối tới Gateway máy chủ: ${GATEWAY_URL}`);
 
 class TestUser {
   constructor(name, userId) {
@@ -66,8 +82,8 @@ async function runTest() {
   await Promise.all([alice.waitForOpen(), bob.waitForOpen()]);
 
   // 1. Handshake HELLO
-  alice.send({ type: 'HELLO', userId: alice.userId, displayName: 'Alice', token: `mock-token:${alice.userId}` });
-  bob.send({ type: 'HELLO', userId: bob.userId, displayName: 'Bob', token: `mock-token:${bob.userId}` });
+  alice.send({ type: 'HELLO', userId: alice.userId, displayName: 'Alice', token: makeJwt(alice.userId) });
+  bob.send({ type: 'HELLO', userId: bob.userId, displayName: 'Bob', token: makeJwt(bob.userId) });
   await new Promise((r) => setTimeout(r, 300));
 
   // 2. Cùng tham gia vào một phòng chat (Room: 'room_demo_999')
@@ -105,7 +121,7 @@ async function runTest() {
   // 6. Alice chỉnh sửa tin nhắn đã gửi
   console.log(`\n--- BƯỚC 5: Alice chỉnh sửa tin nhắn đã gửi (Edit Message) ---`);
   const aliceMsgAck = alice.receivedAcks.find((a) => a.clientMsgId === 'req_alice_001');
-  const targetMsgId = aliceMsgAck ? aliceMsgAck.serverMsgId : 'msg_alice_mock';
+  const targetMsgId = aliceMsgAck ? aliceMsgAck.serverMsgId : '';
   alice.send({
     type: 'EDIT_MSG',
     roomId,

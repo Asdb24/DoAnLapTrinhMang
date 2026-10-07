@@ -5,18 +5,12 @@ const PORT = parseInt(process.env.PORT || '8080', 10);
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
 const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET;
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const ALLOW_DEV_MOCK_TOKENS =
-  process.env.ALLOW_DEV_TOKENS === 'true' ||
-  process.env.NODE_ENV !== 'production' ||
-  !SUPABASE_JWT_SECRET;
-
 const gateway = new ChatFlowGateway({
   port: PORT,
   uploadDir: UPLOAD_DIR,
   heartbeatIntervalMs: 25000,
   supabaseJwtSecret: SUPABASE_JWT_SECRET,
   supabaseUrl: SUPABASE_URL,
-  allowDevMockTokens: ALLOW_DEV_MOCK_TOKENS,
   authRequired: true,
   rateLimitMaxMessages: 10,
   rateLimitWindowMs: 5000,
