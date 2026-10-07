@@ -16,7 +16,7 @@ function queryClient(rows:MessageRow[]=[]) {
  const from=vi.fn((table:string)=>table==='messages'?query:{select:()=>({in:table==='attachments'?attachments:table==='message_reactions'?reactions:profiles})});
  Object.assign(server.client,{from});return {server,query,from,attachments,reactions,profiles};
 }
-const row=(id:string,content=id):MessageRow=>({id,content,conversation_id:'conversation',sender_id:'peer',message_type:'text',media:null,client_message_id:'00000000-0000-0000-0000-000000000001',reply_to_id:null,created_at:'2026-09-19T00:00:00.000Z',updated_at:'2026-09-19T00:00:00.000Z',deleted_at:null});
+const row=(id:string,content=id):MessageRow=>({id,content,conversation_id:'conversation',sender_id:'peer',message_type:'text',media:null,client_message_id:'00000000-0000-0000-0000-000000000001',reply_to_id:null,created_at:'2026-09-19T00:00:00.000Z',updated_at:'2026-09-19T00:00:00.000Z',deleted_at:null,edited_at:null});
 
 describe('message service query contracts',()=>{
  it('uses bounded descending tuple pagination and reverses the page for display',async()=>{

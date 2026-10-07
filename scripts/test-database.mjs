@@ -321,6 +321,32 @@ await as(0,async()=>{
  const empty=await rpc('reserve_attachment',[dm,randomUUID(),'empty.pdf','application/pdf',20]);
  await rpc('claim_attachment_discard',[empty.id]);await rpc('discard_attachment',[empty.id]);count++;
 });
+// Step 3 Functional assertions: edit_message, delete_message, edited_at, soft-delete audit
+let testMsg;
+await as(0, async () => {
+  testMsg = await rpc('send_message', [dm, 'hello editable', randomUUID()]);
+  assert.equal(testMsg.edited_at, null); count++;
+});
+
+await as(1, async () => {
+  await denied(() => rpc('edit_message', [testMsg.id, 'hacked content']));
+  await denied(() => rpc('delete_message', [testMsg.id]));
+});
+
+await as(0, async () => {
+  await rpc('edit_message', [testMsg.id, 'hello edited']);
+  const edited = (await q('select * from public.messages where id=$1', [testMsg.id]))[0];
+  assert.equal(edited.content, 'hello edited'); count++;
+  assert.ok(edited.edited_at !== null); count++;
+
+  await rpc('delete_message', [testMsg.id]);
+  const deleted = (await q('select * from public.messages where id=$1', [testMsg.id]))[0];
+  assert.equal(deleted.content, 'hello edited'); count++;
+  assert.ok(deleted.deleted_at !== null); count++;
+
+  await denied(() => rpc('delete_message', [testMsg.id]));
+  await denied(() => rpc('edit_message', [testMsg.id, 'cannot edit deleted']));
+});
 // Service-role writers evaluate CHECK helpers as themselves, without browser helper grants.
 await db.exec('grant insert,select,update on public.messages,public.media_usage to service_role');
 await db.exec('set role service_role');

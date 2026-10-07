@@ -12,6 +12,8 @@ export interface MessageAttachment {
   size: string;
   type: "image" | "doc" | "pdf";
   url?: string;
+  mimeType?: string;
+  bytes?: number;
 }
 
 export interface MessageType {

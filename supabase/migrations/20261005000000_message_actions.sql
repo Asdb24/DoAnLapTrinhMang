@@ -1,4 +1,6 @@
 -- Migration: Message soft-delete and edit actions
+alter table public.messages add column if not exists edited_at timestamptz;
+
 create or replace function public.delete_message(target_message uuid) returns void language plpgsql security definer set search_path='' as $$
 declare
   u uuid := chat_private.uid();
@@ -11,9 +13,11 @@ begin
   if m.sender_id <> u then
     raise exception 'Only the sender can delete their message';
   end if;
+  if m.deleted_at is not null then
+    raise exception 'Message already deleted';
+  end if;
   update public.messages
   set deleted_at = clock_timestamp(),
-      content = 'Message deleted',
       updated_at = clock_timestamp()
   where id = target_message;
 end $$;
@@ -38,6 +42,7 @@ begin
   end if;
   update public.messages
   set content = btrim(new_content),
+      edited_at = clock_timestamp(),
       updated_at = clock_timestamp()
   where id = target_message;
 end $$;
