@@ -93,14 +93,15 @@ src/components/           Thành phần giao diện chat, channel, settings
 src/context/              State và action chính của ứng dụng
 src/services/             Message, media, storage, workspace, realtime
 src/lib/supabase/         Supabase client phía browser/server
-src/server/               Mã backend SQLite cũ, chỉ giữ cho legacy
+gateway/                  ChatFlow Realtime Gateway (Node.js, WebSocket)
+electron/                 ChatFlow Desktop Client (Electron)
 src/types/                Kiểu dữ liệu ứng dụng và database
 supabase/migrations/      Migration PostgreSQL, RPC, RLS, Storage
 scripts/                  Script kiểm thử và kiểm tra cloud
 docs/                     Tài liệu API, triển khai và xác minh
 ```
 
-Production path sử dụng Supabase. Các file `src/server/*`, `migrations/*` và một số script SQLite là mã legacy cũ, không được import vào route production hiện tại.
+Ứng dụng sử dụng Supabase PostgreSQL kết hợp ChatFlow Realtime Gateway cho kiến trúc microservices phân tán và đồng bộ thời gian thực bảo mật cao.
 
 ## Luồng gửi tin nhắn
 
