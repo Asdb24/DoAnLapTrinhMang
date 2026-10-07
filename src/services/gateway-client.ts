@@ -244,7 +244,9 @@ class GatewayClient {
     content: string,
     clientMsgId: string,
     attachments?: Array<{ id: string; name: string; size: number; mimeType: string; url: string }>,
-    media?: any
+    media?: any,
+    serverMsgId?: string,
+    createdAt?: string
   ) {
     const packet: SendMsgPacket = {
       type: 'SEND_MSG',
@@ -253,6 +255,8 @@ class GatewayClient {
       content,
       attachments,
       media,
+      serverMsgId,
+      createdAt,
     };
     this.sendPacket(packet);
   }

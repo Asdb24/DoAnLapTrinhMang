@@ -630,8 +630,8 @@ export class ChatFlowGateway {
       return;
     }
 
-    const serverMsgId = `msg_${Date.now()}_${randomUUID().slice(0, 8)}`;
-    const nowIso = new Date().toISOString();
+    const serverMsgId = packet.serverMsgId || `msg_${Date.now()}_${randomUUID().slice(0, 8)}`;
+    const nowIso = packet.createdAt || new Date().toISOString();
 
     // Store message author metadata for ownership verification
     this.recentMessages.set(serverMsgId, {
