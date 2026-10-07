@@ -56,13 +56,7 @@ class GatewayClient {
   private errorHandlers: Set<ErrorHandler> = new Set();
 
   private getGatewayUrl(): string {
-    if (typeof window !== 'undefined') {
-      return (
-        process.env.NEXT_PUBLIC_GATEWAY_URL ||
-        'wss://168-138-160-93.sslip.io'
-      );
-    }
-    return 'wss://168-138-160-93.sslip.io';
+    return process.env.NEXT_PUBLIC_GATEWAY_URL || 'wss://168-138-160-93.sslip.io';
   }
 
   public connect(user: GatewayUser, token?: string) {

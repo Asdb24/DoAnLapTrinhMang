@@ -1,6 +1,6 @@
 import {readFileSync,readdirSync,statSync,existsSync} from 'node:fs';
 import {loadEnvFile} from 'node:process';
-loadEnvFile('.env.local');
+if(existsSync('.env.local'))loadEnvFile('.env.local');
 if(existsSync('.env.server.local'))loadEnvFile('.env.server.local');
 const secrets=Object.entries(process.env).filter(([name,value])=>!name.startsWith('NEXT_PUBLIC_')&&/(SECRET|PASSWORD|PRIVATE_KEY|SMTP|ACCESS_TOKEN|SERVICE_ROLE)/i.test(name)&&value&&value.length>=12).map(([,value])=>value);
 for(const name of Object.keys(process.env))if(name.startsWith('NEXT_PUBLIC_')&&/(SECRET|PASSWORD|SERVICE_ROLE|SMTP|PRIVATE_KEY|ACCESS_TOKEN)/i.test(name)&&process.env[name])throw new Error(`Privileged environment variable incorrectly exposed: ${name}`);

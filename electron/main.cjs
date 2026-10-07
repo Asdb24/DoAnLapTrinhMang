@@ -82,6 +82,33 @@ async function startProductionServer(port) {
     HOSTNAME: '127.0.0.1',
   };
 
+  // Check for local .env files next to executable or app directory
+  const envFiles = [
+    path.join(path.dirname(process.execPath), '.env.local'),
+    path.join(path.dirname(process.execPath), '.env'),
+    path.join(__dirname, '..', '.env.local'),
+    path.join(__dirname, '..', '.env'),
+  ];
+  for (const envFile of envFiles) {
+    if (fs.existsSync(envFile)) {
+      try {
+        const lines = fs.readFileSync(envFile, 'utf8').split(/\r?\n/);
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) continue;
+          const idx = trimmed.indexOf('=');
+          if (idx > 0) {
+            const key = trimmed.slice(0, idx).trim();
+            const val = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+            if (!env[key]) env[key] = val;
+          }
+        }
+      } catch (err) {
+        console.warn(`[Electron] Could not parse ${envFile}:`, err.message);
+      }
+    }
+  }
+
   console.log(`[Electron] Spawning Next.js server: ${serverPath} (standalone: ${isStandalone}) on port ${port}`);
 
   serverProcess = spawn(process.execPath, spawnArgs, {
