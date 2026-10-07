@@ -47,6 +47,9 @@ jobs:
         env:
           NEXT_PUBLIC_APP_URL: https://168-138-160-93.sslip.io
           NEXT_PUBLIC_GATEWAY_URL: wss://168-138-160-93.sslip.io
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://boonwujyiwqbrraqdbdy.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_xv9IiylFCrxZgG3WHnk7mw_as0YB9gH' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_xv9IiylFCrxZgG3WHnk7mw_as0YB9gH' }}
         run: npm run build
 
       - name: Build Windows .exe with electron-builder
