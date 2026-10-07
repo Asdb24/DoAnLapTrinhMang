@@ -47,16 +47,6 @@ export interface JwtPayload {
 /**
  * Decodes unverified JWT payload
  */
-export function parseJwtUnverified(token: string): JwtPayload | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf8');
-    return JSON.parse(payloadJson) as JwtPayload;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Verifies standard HS256 JWT signature and expiry using Node.js crypto
@@ -126,7 +116,6 @@ export interface GatewayOptions {
   heartbeatIntervalMs?: number;
   supabaseJwtSecret?: string;
   supabaseUrl?: string;
-  allowDevMockTokens?: boolean;
   authRequired?: boolean;
   rateLimitMaxMessages?: number;
   rateLimitWindowMs?: number;
@@ -210,7 +199,6 @@ export class ChatFlowGateway {
       rateLimitWindowMs: 5000,
       maxTextFrameBytes: 64 * 1024,
       authRequired: true,
-      allowDevMockTokens: true,
       ...options,
     };
     this.setupHttp();
@@ -438,22 +426,7 @@ export class ChatFlowGateway {
       return { valid: false, error: 'Token is required' };
     }
 
-    // 1. Dev / mock token handling
-    if (this.options.allowDevMockTokens) {
-      if (token.startsWith('mock-token:')) {
-        const uid = token.slice('mock-token:'.length).trim();
-        return { valid: true, userId: uid || randomUUID() };
-      }
-      if (token.startsWith('mock-token-')) {
-        const uid = token.slice('mock-token-'.length).trim();
-        return { valid: true, userId: uid || randomUUID() };
-      }
-      if (token === 'dev-token' || token === 'mock-token') {
-        return { valid: true, userId: 'dev-user' };
-      }
-    }
-
-    // 2. Secret verification (HS256)
+    // 1. Secret verification (HS256)
     if (this.options.supabaseJwtSecret) {
       const payload = verifyHs256Jwt(token, this.options.supabaseJwtSecret);
       if (payload && payload.sub) {
@@ -462,7 +435,7 @@ export class ChatFlowGateway {
       return { valid: false, error: 'Invalid or expired JWT signature' };
     }
 
-    // 3. Supabase Auth API verification fallback (if URL provided)
+    // 2. Supabase Auth API verification fallback (if URL provided)
     if (this.options.supabaseUrl) {
       try {
         const res = await fetch(`${this.options.supabaseUrl}/auth/v1/user`, {
@@ -482,15 +455,6 @@ export class ChatFlowGateway {
         console.error('[Gateway] Failed to verify token via Supabase Auth API:', err.message);
         return { valid: false, error: 'Authentication service unreachable' };
       }
-    }
-
-    // 4. Fallback in dev/test when neither secret nor URL is configured
-    if (this.options.allowDevMockTokens) {
-      const parsed = parseJwtUnverified(token);
-      if (parsed?.sub) {
-        return { valid: true, userId: parsed.sub };
-      }
-      return { valid: true, userId: token };
     }
 
     return { valid: false, error: 'Gateway JWT secret or Supabase URL not configured' };
