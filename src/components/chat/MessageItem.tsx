@@ -24,6 +24,16 @@ import { mediaUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { isUnconfirmed } from "@/services/messages";
 import { MediaContent } from "./MediaContent";
+import {
+  Message,
+  MessageAvatar,
+  MessageContent,
+  MessageHeader,
+} from "@/components/ui/message";
+import {
+  Bubble,
+  BubbleContent,
+} from "@/components/ui/bubble";
 
 interface MessageItemProps {
   message: MessageType;
@@ -70,177 +80,284 @@ export function MessageItem({
   };
 
   return (
-    <div
+    <Message
+      align={isSent ? "end" : "start"}
       className={cn(
-        "group relative flex gap-2.5",
-        isSent ? "flex-row-reverse" : "flex-row",
-        isCompact ? "py-1" : "py-2"
+        "group relative",
+        isCompact ? "py-0.5" : "py-1"
       )}
     >
       {/* Avatar for received messages */}
       {!isSent && (
-        <Avatar className="h-8 w-8 mt-0.5 shrink-0 border border-border">
-          <AvatarImage src={message.senderAvatar} alt={message.senderName} />
-          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs font-semibold">
-            {(message.senderName || "??").slice(0, 2).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
+        <MessageAvatar>
+          <Avatar className="h-8 w-8 shrink-0 border border-border">
+            <AvatarImage src={message.senderAvatar} alt={message.senderName} />
+            <AvatarFallback className="bg-secondary text-secondary-foreground text-xs font-semibold">
+              {(message.senderName || "??").slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+        </MessageAvatar>
       )}
 
-      {/* Bubble Container */}
-      <div
-        className={cn(
-          "flex flex-col max-w-[75%] sm:max-w-[65%]",
-          isSent ? "items-end" : "items-start"
-        )}
-      >
-        {/* Sender Name in group or incoming */}
+      {/* Message Content Container */}
+      <MessageContent>
+        {/* Header with Sender Name in group or incoming */}
         {!isSent && showSenderName && (
-          <span className="text-xs font-semibold text-muted-foreground mb-1 ml-1">
-            {message.senderName}
-          </span>
+          <MessageHeader>
+            <span className="font-semibold text-muted-foreground">{message.senderName}</span>
+          </MessageHeader>
         )}
 
-        {/* Message Bubble */}
-        <div
-          className={cn(
-            "relative rounded-2xl shadow-xs transition-colors",
-            isCompact ? "px-3 py-1.5 text-xs" : "px-4 py-2.5 text-sm",
-            isDeleted
-              ? "bg-muted/60 text-muted-foreground border border-dashed border-border rounded-xl"
-              : isSent
-              ? "bg-primary text-primary-foreground rounded-tr-xs"
-              : "bg-secondary text-secondary-foreground rounded-tl-xs"
-          )}
-        >
-          {/* Text Content / Edit Mode / Deleted State */}
-          {isDeleted ? (
-            <p className="italic text-muted-foreground leading-relaxed text-xs">
-              Tin nhắn đã bị thu hồi
-            </p>
-          ) : isEditing ? (
-            <div className="space-y-1.5 py-1 min-w-[200px]">
-              <textarea
-                className="w-full text-xs sm:text-sm bg-background text-foreground border rounded p-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
-                value={editDraft}
-                onChange={(e) => setEditDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSaveEdit();
-                  } else if (e.key === "Escape") {
-                    setIsEditing(false);
-                  }
-                }}
-                rows={2}
-                autoFocus
-              />
-              <div className="flex items-center justify-end gap-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 px-2 text-xs"
-                  onClick={() => {
-                    setEditDraft(message.content);
-                    setIsEditing(false);
-                  }}
+        {/* Bubble Row with hover actions */}
+        <div className="relative flex items-center gap-1.5 group/bubble-row">
+          {/* Action Trigger on Hover for sent messages (left side) */}
+          {isSent && !isDeleted && (
+            <div
+              className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 self-center order-first"
+            >
+              <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
+                    aria-label="Add reaction"
+                    disabled={pending || archived}
+                  >
+                    <SmilePlus className="h-3.5 w-3.5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="top"
+                  align="end"
+                  className="p-1.5 w-auto flex items-center gap-1 bg-card border-border shadow-md"
                 >
-                  <X className="h-3 w-3 mr-1" /> Hủy
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="default"
-                  className="h-6 px-2 text-xs"
-                  disabled={!editDraft.trim() || editDraft.trim() === message.content}
-                  onClick={handleSaveEdit}
-                >
-                  <Check className="h-3 w-3 mr-1" /> Lưu
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <p className="whitespace-pre-wrap break-words leading-relaxed">
-                {message.content}
-              </p>
-              {message.media && <MediaContent key={message.media.id} media={message.media} />}
-
-              {/* Attachments if any */}
-              {message.attachments && message.attachments.length > 0 && (
-                <div className="mt-2 space-y-1.5">
-                  {message.attachments.map((att, idx) => (
-                    <a
-                      href={mediaUrl(att.url)}
-                      download={att.name}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label={att.url ? `Download ${att.name}` : `${att.name} (file unavailable)`}
-                      key={idx}
-                      className={cn(
-                        "flex items-center gap-2 p-2 rounded-lg text-xs border",
-                        isSent
-                          ? "bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground"
-                          : "bg-background border-border text-foreground"
-                      )}
+                  {COMMON_EMOJIS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      disabled={pending || archived}
+                      onClick={() => handleReact(emoji)}
+                      className="h-7 w-7 rounded hover:bg-muted text-base flex items-center justify-center transition-transform hover:scale-125"
                     >
-                      {att.type === "image" ? (
-                        mediaUrl(att.url) ? (
-                          <img src={mediaUrl(att.url)} alt={att.name} className="h-16 w-16 rounded object-cover" />
-                        ) : (
-                          <ImageIcon className="h-4 w-4 shrink-0" />
-                        )
-                      ) : (
-                        <FileText className="h-4 w-4 shrink-0" />
-                      )}
-                      <span className="font-medium truncate">{att.name}</span>
-                      <span className="text-[10px] opacity-75 shrink-0 ml-auto">
-                        {att.size}
-                      </span>
-                    </a>
+                      {emoji}
+                    </button>
                   ))}
-                </div>
+                </PopoverContent>
+              </Popover>
+
+              {!isUnconfirmed(message) && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
+                    aria-label="Edit message"
+                    title="Chỉnh sửa tin nhắn"
+                    disabled={pending || archived || isEditing}
+                    onClick={() => {
+                      setEditDraft(message.content);
+                      setIsEditing(true);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-full text-muted-foreground hover:text-destructive"
+                    aria-label="Delete message"
+                    title="Xóa tin nhắn"
+                    disabled={pending || archived || isEditing}
+                    onClick={handleDelete}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </>
               )}
-            </>
+            </div>
           )}
 
-          {/* Time & Read Receipts inside bubble footer */}
-          <div
+          {/* Bubble Component */}
+          <Bubble
+            variant={isDeleted ? "muted" : isSent ? "default" : "secondary"}
+            align={isSent ? "end" : "start"}
             className={cn(
-              "flex items-center gap-1.5 mt-1 justify-end text-[10px]",
-              isDeleted
-                ? "text-muted-foreground"
-                : isSent
-                ? "text-primary-foreground/75"
-                : "text-muted-foreground"
+              isDeleted && "border border-dashed border-border rounded-xl"
             )}
           >
-            {message.isEdited && !isDeleted && (
-              <span className="italic opacity-80">(đã chỉnh sửa)</span>
-            )}
-            <span>{message.timestamp}</span>
-            {isSent && !isDeleted && (
-              <span>
-                {message.status === "sending" ? (
-                  <span role="status">Sending…</span>
-                ) : message.status === "failed" ? (
-                  <span role="status">Not sent · Retry from composer</span>
-                ) : message.status === "read" ? (
-                  <CheckCheck className="h-3.5 w-3.5 text-primary-foreground" />
-                ) : (
-                  <Check className="h-3 w-3" />
+            <BubbleContent
+              className={cn(
+                isCompact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm",
+                isSent ? "rounded-tr-xs" : "rounded-tl-xs",
+                isDeleted && "italic"
+              )}
+            >
+              {isDeleted ? (
+                <p className="italic text-muted-foreground leading-relaxed text-xs">
+                  Tin nhắn đã bị thu hồi
+                </p>
+              ) : isEditing ? (
+                <div className="space-y-1.5 py-1 min-w-[200px]">
+                  <textarea
+                    className="w-full text-xs sm:text-sm bg-background text-foreground border rounded p-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+                    value={editDraft}
+                    onChange={(e) => setEditDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSaveEdit();
+                      } else if (e.key === "Escape") {
+                        setIsEditing(false);
+                      }
+                    }}
+                    rows={2}
+                    autoFocus
+                  />
+                  <div className="flex items-center justify-end gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-xs"
+                      onClick={() => {
+                        setEditDraft(message.content);
+                        setIsEditing(false);
+                      }}
+                    >
+                      <X className="h-3 w-3 mr-1" /> Hủy
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="default"
+                      className="h-6 px-2 text-xs"
+                      disabled={!editDraft.trim() || editDraft.trim() === message.content}
+                      onClick={handleSaveEdit}
+                    >
+                      <Check className="h-3 w-3 mr-1" /> Lưu
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="whitespace-pre-wrap break-words leading-relaxed">
+                    {message.content}
+                  </p>
+                  {message.media && <MediaContent key={message.media.id} media={message.media} />}
+
+                  {/* Attachments if any */}
+                  {message.attachments && message.attachments.length > 0 && (
+                    <div className="mt-2 space-y-1.5">
+                      {message.attachments.map((att, idx) => (
+                        <a
+                          href={mediaUrl(att.url)}
+                          download={att.name}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={att.url ? `Download ${att.name}` : `${att.name} (file unavailable)`}
+                          key={idx}
+                          className={cn(
+                            "flex items-center gap-2 p-2 rounded-lg text-xs border",
+                            isSent
+                              ? "bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground"
+                              : "bg-background border-border text-foreground"
+                          )}
+                        >
+                          {att.type === "image" ? (
+                            mediaUrl(att.url) ? (
+                              <img src={mediaUrl(att.url)} alt={att.name} className="h-16 w-16 rounded object-cover" />
+                            ) : (
+                              <ImageIcon className="h-4 w-4 shrink-0" />
+                            )
+                          ) : (
+                            <FileText className="h-4 w-4 shrink-0" />
+                          )}
+                          <span className="font-medium truncate">{att.name}</span>
+                          <span className="text-[10px] opacity-75 shrink-0 ml-auto">
+                            {att.size}
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Time & Read Receipts */}
+              <div
+                className={cn(
+                  "flex items-center gap-1.5 mt-1 justify-end text-[10px]",
+                  isDeleted
+                    ? "text-muted-foreground"
+                    : isSent
+                    ? "text-primary-foreground/75"
+                    : "text-muted-foreground"
                 )}
-              </span>
-            )}
-          </div>
+              >
+                {message.isEdited && !isDeleted && (
+                  <span className="italic opacity-80">(đã chỉnh sửa)</span>
+                )}
+                <span>{message.timestamp}</span>
+                {isSent && !isDeleted && (
+                  <span>
+                    {message.status === "sending" ? (
+                      <span role="status">Sending…</span>
+                    ) : message.status === "failed" ? (
+                      <span role="status">Not sent · Retry from composer</span>
+                    ) : message.status === "read" ? (
+                      <CheckCheck className="h-3.5 w-3.5 text-primary-foreground" />
+                    ) : (
+                      <Check className="h-3 w-3" />
+                    )}
+                  </span>
+                )}
+              </div>
+            </BubbleContent>
+          </Bubble>
+
+          {/* Action Trigger on Hover for received messages (right side) */}
+          {!isSent && !isDeleted && (
+            <div
+              className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 self-center order-last"
+            >
+              <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
+                    aria-label="Add reaction"
+                    disabled={pending || archived}
+                  >
+                    <SmilePlus className="h-3.5 w-3.5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="top"
+                  align="start"
+                  className="p-1.5 w-auto flex items-center gap-1 bg-card border-border shadow-md"
+                >
+                  {COMMON_EMOJIS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      disabled={pending || archived}
+                      onClick={() => handleReact(emoji)}
+                      className="h-7 w-7 rounded hover:bg-muted text-base flex items-center justify-center transition-transform hover:scale-125"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
         </div>
 
         {/* Reactions Row */}
         {!isDeleted && message.reactions && message.reactions.length > 0 && (
           <div
             className={cn(
-              "flex flex-wrap gap-1 mt-1.5",
+              "flex flex-wrap gap-1 mt-1",
               isSent ? "justify-end" : "justify-start"
             )}
           >
@@ -262,77 +379,7 @@ export function MessageItem({
             ))}
           </div>
         )}
-      </div>
-
-      {/* Floating Action Trigger on Hover */}
-      {!isDeleted && (
-        <div
-          className={cn(
-            "opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 self-center",
-            isSent ? "order-first" : "order-last"
-          )}
-        >
-          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
-                aria-label="Add reaction"
-                disabled={pending || archived}
-              >
-                <SmilePlus className="h-3.5 w-3.5" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              side="top"
-              align={isSent ? "end" : "start"}
-              className="p-1.5 w-auto flex items-center gap-1 bg-card border-border shadow-md"
-            >
-              {COMMON_EMOJIS.map((emoji) => (
-                <button
-                  key={emoji}
-                  disabled={pending || archived}
-                  onClick={() => handleReact(emoji)}
-                  className="h-7 w-7 rounded hover:bg-muted text-base flex items-center justify-center transition-transform hover:scale-125"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </PopoverContent>
-          </Popover>
-
-          {isSent && !isUnconfirmed(message) && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
-                aria-label="Edit message"
-                title="Chỉnh sửa tin nhắn"
-                disabled={pending || archived || isEditing}
-                onClick={() => {
-                  setEditDraft(message.content);
-                  setIsEditing(true);
-                }}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 rounded-full text-muted-foreground hover:text-destructive"
-                aria-label="Delete message"
-                title="Xóa tin nhắn"
-                disabled={pending || archived || isEditing}
-                onClick={handleDelete}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </>
-          )}
-        </div>
-      )}
-    </div>
+      </MessageContent>
+    </Message>
   );
 }

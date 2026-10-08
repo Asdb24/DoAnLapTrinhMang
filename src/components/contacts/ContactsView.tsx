@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UserStatusIndicator, UserStatusBadge } from "@/components/common/UserStatusIndicator";
 import { Search, MessageSquare, Mail, UserPlus, Users, ShieldAlert, ShieldCheck } from "lucide-react";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 
 export function ContactsView() {
   const { contacts, startDirectChat, pending, blockedUsers, blockUser, unblockUser } = useChatFlow();
@@ -42,7 +43,10 @@ export function ContactsView() {
       <div className="border-b bg-card/40 px-6 py-6 sm:px-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Colleagues & Contacts</h1>
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="-ml-2 mr-1 hidden md:inline-flex" />
+              <h1 className="text-2xl font-bold tracking-tight">Colleagues & Contacts</h1>
+            </div>
             <p className="text-sm text-muted-foreground mt-1">
               Find colleagues, see their status, and start a conversation.
             </p>

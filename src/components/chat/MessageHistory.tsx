@@ -3,6 +3,7 @@
 import React, { useRef, useEffect, useCallback } from "react";
 import { Conversation, MessageType } from "@/types";
 import { MessageItem } from "./MessageItem";
+import { MessageGroup } from "@/components/ui/message";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useChatFlow } from "@/context/ChatFlowContext";
@@ -81,16 +82,36 @@ export function MessageHistory({ conversation }: MessageHistoryProps) {
                 </Badge>
               </div>
 
-              {/* Messages for this date */}
-              <div className="space-y-1">
-                {messages.map((msg) => (
-                  <MessageItem
-                    key={msg.id}
-                    message={msg}
-                    conversationId={conversation.id}
-                    showSenderName={conversation.type === "group"}
-                  />
-                ))}
+              {/* Messages for this date grouped by sender */}
+              <div className="space-y-3">
+                {(() => {
+                  const groups: MessageType[][] = [];
+                  for (const msg of messages) {
+                    const lastGroup = groups[groups.length - 1];
+                    const lastMsg = lastGroup?.[lastGroup.length - 1];
+                    if (
+                      lastMsg &&
+                      (lastMsg.senderId === msg.senderId ||
+                        (Boolean(lastMsg.isSentByMe) && Boolean(msg.isSentByMe)))
+                    ) {
+                      lastGroup.push(msg);
+                    } else {
+                      groups.push([msg]);
+                    }
+                  }
+                  return groups.map((grp, gIdx) => (
+                    <MessageGroup key={grp[0].id || gIdx} className="gap-1">
+                      {grp.map((msg, mIdx) => (
+                        <MessageItem
+                          key={msg.id}
+                          message={msg}
+                          conversationId={conversation.id}
+                          showSenderName={conversation.type === "group" && mIdx === 0}
+                        />
+                      ))}
+                    </MessageGroup>
+                  ));
+                })()}
               </div>
             </div>
           ))

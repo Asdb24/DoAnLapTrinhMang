@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ChatFlowProvider } from "@/context/ChatFlowContext";
 import { AppSidebar } from "@/components/app-sidebar";
-import { AppHeader } from "@/components/layout/AppHeader";
 import { NewMessageDialog } from "@/components/dialogs/NewMessageDialog";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { appOrigin } from "@/lib/public-url.mjs";
@@ -35,7 +34,6 @@ export default function RootLayout({
 
             {/* Main Application Inset Area */}
             <SidebarInset className="flex flex-col h-screen overflow-hidden min-w-0">
-              <AppHeader />
               <main className="flex-1 flex min-w-0 h-full overflow-hidden">
                 {children}
               </main>
