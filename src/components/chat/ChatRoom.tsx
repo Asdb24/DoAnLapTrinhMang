@@ -52,7 +52,10 @@ export function ChatRoom({ id }: { id: string }) {
           showDetails={showDetails}
           setShowDetails={setShowDetails}
         />
-        <div className="px-4 py-1 text-xs text-muted-foreground" role="status">{loadingMessages ? 'Loading messages…' : realtimeStatus === 'SUBSCRIBED' ? 'Connected · Live messages' : 'Reconnecting… Messages will sync when connected.'}</div>
+        <div className="px-4 py-1 text-[11px] text-muted-foreground/80 flex items-center gap-1.5 border-b border-border/40 bg-card/30 shrink-0 select-none" role="status">
+          <span className={`inline-block h-1.5 w-1.5 rounded-full ${realtimeStatus === 'SUBSCRIBED' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
+          {loadingMessages ? 'Loading messages…' : realtimeStatus === 'SUBSCRIBED' ? 'Connected · Live messages' : 'Reconnecting… Messages will sync when connected.'}
+        </div>
         <MessageHistory conversation={conversation} />
         {conversation.isArchived ? <div className="border-t bg-muted/30 p-4 text-center text-sm text-muted-foreground">Imported history · This conversation is read-only. Start a new conversation to send messages. <a href="/api/migrate" download="chatflow-browser-backup.json" className="ml-1 underline text-primary">Download imported backup</a></div> : <MessageInputBar
           key={conversation.id}

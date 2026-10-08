@@ -4,15 +4,12 @@ import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
-  Command,
   Hash,
   Inbox,
-  Settings,
   Users,
 } from "lucide-react"
 
 import { NavUser } from "@/components/nav-user"
-import { Label } from "@/components/ui/label"
 import {
   Sidebar,
   SidebarContent,
@@ -26,12 +23,12 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { Switch } from "@/components/ui/switch"
 import { useChatFlow } from "@/context/ChatFlowContext"
 import { CreateChannelDialog } from "@/components/channels/CreateChannelDialog"
 import { cn } from "@/lib/utils"
 
 type NavSection = "Chats" | "Channels" | "Contacts" | "Settings"
+type MessageFilter = "all" | "unread" | "direct" | "group"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
@@ -56,7 +53,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const [activeSection, setActiveSection] = React.useState<NavSection>(getRouteSection())
   const [searchQuery, setSearchQuery] = React.useState("")
-  const [unreadOnly, setUnreadOnly] = React.useState(false)
+  const [messageFilter, setMessageFilter] = React.useState<MessageFilter>("all")
   const [createChannelOpen, setCreateChannelOpen] = React.useState(false)
 
   React.useEffect(() => {
@@ -79,12 +76,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       url: "/contacts",
       icon: Users,
     },
-    {
-      title: "Settings" as NavSection,
-      url: "/settings",
-      icon: Settings,
-    },
   ]
+
+  const totalUnreadCount = React.useMemo(() => {
+    return conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0)
+  }, [conversations])
 
   const handleNavClick = (section: NavSection, url: string) => {
     setActiveSection(section)
@@ -95,7 +91,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   const filteredConversations = conversations.filter((c) => {
-    if (unreadOnly && c.unreadCount === 0) return false
+    if (messageFilter === "unread" && c.unreadCount === 0) return false
+    if (messageFilter === "direct" && c.type !== "direct") return false
+    if (messageFilter === "group" && c.type !== "group") return false
     if (!searchQuery.trim()) return true
     const q = searchQuery.toLowerCase()
     return c.name.toLowerCase().includes(q) || c.lastMessage.toLowerCase().includes(q)
@@ -139,25 +137,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           collapsible="none"
           className="!w-[calc(var(--sidebar-width-icon)+1px)] shrink-0 border-r"
         >
-          <SidebarHeader>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton size="lg" asChild className="md:h-8 md:p-0">
-                  <a href="#">
-                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                      <Command className="size-4" />
-                    </div>
-                    <div className="grid flex-1 text-left text-sm leading-tight md:hidden">
-                      <span className="truncate font-medium">ChatFlow</span>
-                      <span className="truncate text-xs">Workspace</span>
-                    </div>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarHeader>
-
-          <SidebarContent>
+          <SidebarContent className="pt-3">
             <SidebarGroup>
               <SidebarGroupContent className="px-1.5 md:px-0">
                 <SidebarMenu>
@@ -189,27 +169,81 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
         {/* Second Sidebar: Item list */}
         <Sidebar collapsible="none" className="hidden flex-1 md:flex min-w-0">
-          <SidebarHeader className="gap-3.5 border-b p-4">
+          <SidebarHeader className="gap-3 border-b p-3.5">
             <div className="flex w-full items-center justify-between">
-              <div className="text-base font-medium text-foreground">
+              <span className="text-base font-semibold text-foreground tracking-tight">
                 {activeSection}
-              </div>
-              {activeSection === "Chats" && (
-                <Label className="flex items-center gap-2 text-sm">
-                  <span>Unreads</span>
-                  <Switch
-                    checked={unreadOnly}
-                    onCheckedChange={setUnreadOnly}
-                    className="shadow-none"
-                  />
-                </Label>
-              )}
+              </span>
             </div>
             <SidebarInput
               placeholder="Type to search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
+            {activeSection === "Chats" && (
+              <div className="flex items-center gap-1.5 pt-0.5 overflow-x-auto no-scrollbar">
+                <button
+                  type="button"
+                  onClick={() => setMessageFilter("all")}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
+                    messageFilter === "all"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  Tất cả
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMessageFilter("unread")}
+                  className={cn(
+                    "inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
+                    messageFilter === "unread"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <span>Chưa đọc</span>
+                  {totalUnreadCount > 0 && (
+                    <span
+                      className={cn(
+                        "flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold",
+                        messageFilter === "unread"
+                          ? "bg-primary-foreground/20 text-primary-foreground"
+                          : "bg-primary text-primary-foreground"
+                      )}
+                    >
+                      {totalUnreadCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMessageFilter("direct")}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
+                    messageFilter === "direct"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  Cá nhân
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMessageFilter("group")}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
+                    messageFilter === "group"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  Nhóm
+                </button>
+              </div>
+            )}
           </SidebarHeader>
 
           <SidebarContent>
@@ -221,8 +255,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <div className="p-8 text-center text-xs text-muted-foreground">
                       {searchQuery
                         ? "No conversations match your search."
-                        : unreadOnly
+                        : messageFilter === "unread"
                         ? "No unread conversations."
+                        : messageFilter === "group"
+                        ? "No group conversations."
+                        : messageFilter === "direct"
+                        ? "No direct conversations."
                         : "No conversations yet."}
                     </div>
                   ) : (
@@ -236,16 +274,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             if (isMobile) setOpenMobile(false)
                           }}
                           className={cn(
-                            "flex flex-col items-start gap-2 border-b p-4 text-sm leading-tight whitespace-nowrap last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                            isActive &&
-                              "bg-sidebar-accent text-sidebar-accent-foreground"
+                            "flex flex-col items-start gap-2 border-b p-4 text-sm leading-tight whitespace-nowrap last:border-b-0 transition-all",
+                            isActive
+                              ? "bg-primary/10 text-foreground font-medium border-l-2 border-l-primary pl-3.5 shadow-2xs"
+                              : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-muted-foreground hover:text-foreground"
                           )}
                         >
                           <div className="flex w-full items-center gap-2">
-                            <span>{conv.name}</span>
-                            <span className="ml-auto text-xs">{conv.lastMessageTime}</span>
+                            <span className={cn(isActive ? "font-semibold text-foreground" : "font-medium text-foreground")}>{conv.name}</span>
+                            {conv.unreadCount > 0 && (
+                              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                                {conv.unreadCount}
+                              </span>
+                            )}
+                            <span className="ml-auto text-xs text-muted-foreground">{conv.lastMessageTime}</span>
                           </div>
-                          <span className="font-medium">
+                          <span className="font-medium text-xs">
                             {conv.type === "group" ? `# ${conv.name}` : `@${conv.name.toLowerCase().replace(/\s+/g, "")}`}
                           </span>
                           <span className="line-clamp-2 w-[260px] text-xs whitespace-break-spaces text-muted-foreground">
@@ -275,9 +319,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           key={channel.id}
                           onClick={() => handleSelectChannel(channel.id)}
                           className={cn(
-                            "flex flex-col items-start gap-2 border-b p-4 text-sm leading-tight whitespace-nowrap last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground w-full text-left",
-                            isActive &&
-                              "bg-sidebar-accent text-sidebar-accent-foreground"
+                            "flex flex-col items-start gap-2 border-b p-4 text-sm leading-tight whitespace-nowrap last:border-b-0 w-full text-left transition-all",
+                            isActive
+                              ? "bg-primary/10 text-foreground font-medium border-l-2 border-l-primary pl-3.5 shadow-2xs"
+                              : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-muted-foreground hover:text-foreground"
                           )}
                         >
                           <div className="flex w-full items-center gap-2">

@@ -19,15 +19,15 @@ const bubbleVariants = cva(
     variants: {
       variant: {
         default:
-          "[&>[data-slot=bubble-content]]:bg-primary [&>[data-slot=bubble-content]]:text-primary-foreground",
+          "[&>[data-slot=bubble-content]]:bg-primary [&>[data-slot=bubble-content]]:text-primary-foreground [&>[data-slot=bubble-content]]:shadow-xs",
         secondary:
-          "[&>[data-slot=bubble-content]]:bg-secondary [&>[data-slot=bubble-content]]:text-secondary-foreground",
+          "[&>[data-slot=bubble-content]]:bg-card [&>[data-slot=bubble-content]]:text-card-foreground [&>[data-slot=bubble-content]]:border-border/80 [&>[data-slot=bubble-content]]:shadow-2xs dark:[&>[data-slot=bubble-content]]:bg-secondary dark:[&>[data-slot=bubble-content]]:text-secondary-foreground dark:[&>[data-slot=bubble-content]]:border-border/30",
         muted:
           "[&>[data-slot=bubble-content]]:bg-muted [&>[data-slot=bubble-content]]:text-muted-foreground",
         outline:
           "[&>[data-slot=bubble-content]]:border-border [&>[data-slot=bubble-content]]:bg-background [&>[data-slot=bubble-content]]:text-foreground",
         ghost:
-          "border-none [&>[data-slot=bubble-content]]:rounded-none [&>[data-slot=bubble-content]]:bg-transparent [&>[data-slot=bubble-content]]:p-0",
+          "border-none [&>[data-slot=bubble-content]]:rounded-none [&>[data-slot=bubble-content]]:bg-transparent [&>[data-slot=bubble-content]]:p-0 [&>[data-slot=bubble-content]]:border-none",
         destructive:
           "[&>[data-slot=bubble-content]]:bg-destructive/10 [&>[data-slot=bubble-content]]:text-destructive dark:[&>[data-slot=bubble-content]]:bg-destructive/20",
       },

@@ -76,7 +76,7 @@ export function MessageHistory({ conversation }: MessageHistoryProps) {
                 </div>
                 <Badge
                   variant="outline"
-                  className="relative bg-background text-muted-foreground text-[11px] font-medium px-2.5 py-0.5"
+                  className="relative bg-background text-muted-foreground text-[11px] font-medium px-2.5 py-0.5 rounded-full border-border/80 shadow-2xs"
                 >
                   {date}
                 </Badge>

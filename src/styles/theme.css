@@ -1,6 +1,8 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/**
+ * ChatFlow Design System - CSS Variable Tokens
+ * Light and Dark color scales for Tailwind CSS & shadcn components
+ * Rule 9 compliant: Automatically synced with theme-config.ts
+ */
 
 @layer base {
   :root {
@@ -95,14 +97,5 @@
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 217.2 32.6% 17.5%;
     --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
   }
 }

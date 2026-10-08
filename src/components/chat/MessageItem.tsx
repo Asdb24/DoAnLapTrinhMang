@@ -56,6 +56,9 @@ export function MessageItem({
   const isSent = message.isSentByMe;
   const isCompact = settings.density === "compact";
   const isDeleted = Boolean(message.isDeleted || message.content === "Message deleted");
+  const isSticker = Boolean(message.media?.kind === "sticker" && !message.content);
+  const isGifOnly = Boolean(message.media?.kind === "gif" && !message.content);
+  const isMediaOnly = isSticker || isGifOnly;
 
   const archived = conversations.find((c) => c.id === conversationId)?.isArchived || isUnconfirmed(message);
   const handleReact = async (emoji: string) => {
@@ -179,16 +182,26 @@ export function MessageItem({
 
           {/* Bubble Component */}
           <Bubble
-            variant={isDeleted ? "muted" : isSent ? "default" : "secondary"}
+            variant={
+              isDeleted
+                ? "muted"
+                : isMediaOnly
+                ? "ghost"
+                : isSent
+                ? "default"
+                : "secondary"
+            }
             align={isSent ? "end" : "start"}
             className={cn(
-              isDeleted && "border border-dashed border-border rounded-xl"
+              isDeleted && "border border-dashed border-border rounded-xl",
+              isMediaOnly && "p-0 bg-transparent border-none"
             )}
           >
             <BubbleContent
               className={cn(
                 isCompact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm",
-                isSent ? "rounded-tr-xs" : "rounded-tl-xs",
+                !isMediaOnly && (isSent ? "rounded-tr-xs" : "rounded-tl-xs"),
+                isMediaOnly && "p-0 border-none bg-transparent overflow-visible",
                 isDeleted && "italic"
               )}
             >
@@ -240,10 +253,16 @@ export function MessageItem({
                 </div>
               ) : (
                 <>
-                  <p className="whitespace-pre-wrap break-words leading-relaxed">
-                    {message.content}
-                  </p>
-                  {message.media && <MediaContent key={message.media.id} media={message.media} />}
+                  {Boolean(message.content?.trim()) && (
+                    <p className="whitespace-pre-wrap break-words leading-relaxed">
+                      {message.content}
+                    </p>
+                  )}
+                  {message.media && (
+                    <div className={cn(Boolean(message.content?.trim()) && "mt-2")}>
+                      <MediaContent key={message.media.id} media={message.media} />
+                    </div>
+                  )}
 
                   {/* Attachments if any */}
                   {message.attachments && message.attachments.length > 0 && (
@@ -287,10 +306,10 @@ export function MessageItem({
               <div
                 className={cn(
                   "flex items-center gap-1.5 mt-1 justify-end text-[10px]",
-                  isDeleted
+                  isDeleted || isMediaOnly
                     ? "text-muted-foreground"
                     : isSent
-                    ? "text-primary-foreground/75"
+                    ? "text-primary-foreground/80"
                     : "text-muted-foreground"
                 )}
               >
@@ -305,9 +324,19 @@ export function MessageItem({
                     ) : message.status === "failed" ? (
                       <span role="status">Not sent · Retry from composer</span>
                     ) : message.status === "read" ? (
-                      <CheckCheck className="h-3.5 w-3.5 text-primary-foreground" />
+                      <CheckCheck
+                        className={cn(
+                          "h-3.5 w-3.5",
+                          isMediaOnly ? "text-primary" : "text-primary-foreground"
+                        )}
+                      />
                     ) : (
-                      <Check className="h-3 w-3" />
+                      <Check
+                        className={cn(
+                          "h-3 w-3",
+                          isMediaOnly ? "text-muted-foreground" : "text-primary-foreground/80"
+                        )}
+                      />
                     )}
                   </span>
                 )}
