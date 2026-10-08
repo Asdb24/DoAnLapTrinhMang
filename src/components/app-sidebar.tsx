@@ -131,13 +131,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <>
       <Sidebar
         collapsible="icon"
-        className="overflow-hidden *:data-[sidebar=sidebar]:flex-row"
+        className="overflow-hidden [&>[data-sidebar=sidebar]]:!flex-row"
         {...props}
       >
         {/* First Sidebar: Icon Rail */}
         <Sidebar
           collapsible="none"
-          className="w-[calc(var(--sidebar-width-icon)+1px)]! border-r"
+          className="!w-[calc(var(--sidebar-width-icon)+1px)] shrink-0 border-r"
         >
           <SidebarHeader>
             <SidebarMenu>
@@ -147,7 +147,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
                       <Command className="size-4" />
                     </div>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
+                    <div className="grid flex-1 text-left text-sm leading-tight md:hidden">
                       <span className="truncate font-medium">ChatFlow</span>
                       <span className="truncate text-xs">Workspace</span>
                     </div>
@@ -173,7 +173,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         className="px-2.5 md:px-2"
                       >
                         <item.icon />
-                        <span>{item.title}</span>
+                        <span className="md:hidden">{item.title}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
@@ -188,7 +188,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </Sidebar>
 
         {/* Second Sidebar: Item list */}
-        <Sidebar collapsible="none" className="hidden flex-1 md:flex">
+        <Sidebar collapsible="none" className="hidden flex-1 md:flex min-w-0">
           <SidebarHeader className="gap-3.5 border-b p-4">
             <div className="flex w-full items-center justify-between">
               <div className="text-base font-medium text-foreground">

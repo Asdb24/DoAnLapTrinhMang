@@ -69,11 +69,11 @@ export function NavUser() {
                   {initials}
                 </AvatarFallback>
               </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
+              <div className="grid flex-1 text-left text-sm leading-tight md:hidden">
                 <span className="truncate font-semibold">{displayName}</span>
                 <span className="truncate text-xs text-muted-foreground">{email}</span>
               </div>
-              <ChevronsUpDown className="ml-auto size-4" />
+              <ChevronsUpDown className="ml-auto size-4 md:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
