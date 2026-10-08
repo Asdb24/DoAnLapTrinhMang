@@ -63,17 +63,12 @@ export function NavUser() {
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground md:h-8 md:p-0"
               aria-label="User account menu"
             >
-              <div className="relative">
-                <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={avatar} alt={displayName} />
-                  <AvatarFallback className="rounded-lg text-xs font-semibold bg-secondary text-secondary-foreground">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="absolute -bottom-0.5 -right-0.5">
-                  <UserStatusIndicator status={settings?.presence || "online"} size="sm" />
-                </span>
-              </div>
+              <Avatar className="h-8 w-8 rounded-lg">
+                <AvatarImage src={avatar} alt={displayName} />
+                <AvatarFallback className="rounded-lg text-xs font-semibold bg-secondary text-secondary-foreground">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">{displayName}</span>
                 <span className="truncate text-xs text-muted-foreground">{email}</span>
