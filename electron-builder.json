@@ -5,11 +5,14 @@
   "directories": {
     "output": "release"
   },
+  "compression": "maximum",
   "files": [
     "electron/**/*",
-    ".next/**/*",
-    "public/**/*",
-    "package.json"
+    ".next/standalone/**/*",
+    "package.json",
+    "!node_modules/**/*",
+    "!.next/cache/**/*",
+    "!.next/dev/**/*"
   ],
   "asar": true,
   "asarUnpack": [
