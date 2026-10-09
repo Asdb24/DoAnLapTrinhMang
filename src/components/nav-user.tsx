@@ -60,10 +60,14 @@ export function NavUser() {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground md:h-8 md:p-0"
+              tooltip={{
+                children: displayName,
+                hidden: false,
+              }}
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground md:h-9 md:w-9 md:p-0 md:justify-center md:mx-auto rounded-lg"
               aria-label="User account menu"
             >
-              <Avatar className="h-8 w-8 rounded-lg">
+              <Avatar className="h-8 w-8 rounded-lg border border-border/80 shadow-2xs">
                 <AvatarImage src={avatar} alt={displayName} />
                 <AvatarFallback className="rounded-lg text-xs font-semibold bg-secondary text-secondary-foreground">
                   {initials}

@@ -69,7 +69,6 @@ export function MessageHistory({ conversation }: MessageHistoryProps) {
         ) : (
           dateSections.map(({ date, messages }) => (
             <div key={messages[0].id} className="space-y-3">
-              {/* Date Separator */}
               <div className="relative flex items-center justify-center my-4">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-border" />
@@ -82,7 +81,6 @@ export function MessageHistory({ conversation }: MessageHistoryProps) {
                 </Badge>
               </div>
 
-              {/* Messages for this date grouped by sender */}
               <div className="space-y-3">
                 {(() => {
                   const groups: MessageType[][] = [];

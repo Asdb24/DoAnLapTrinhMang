@@ -129,13 +129,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <>
       <Sidebar
         collapsible="icon"
-        className="overflow-hidden [&>[data-sidebar=sidebar]]:!flex-row"
+        className="overflow-hidden [&>[data-sidebar=sidebar]]:!flex-row border-r border-border"
         {...props}
       >
-        {/* First Sidebar: Icon Rail */}
         <Sidebar
           collapsible="none"
-          className="!w-[calc(var(--sidebar-width-icon)+1px)] shrink-0 border-r"
+          className="!w-[calc(var(--sidebar-width-icon)+1px)] shrink-0 border-r border-border bg-sidebar/80"
         >
           <SidebarContent className="pt-3">
             <SidebarGroup>
@@ -148,11 +147,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           children: item.title,
                           hidden: false,
                         }}
+                        aria-label={item.title}
                         onClick={() => handleNavClick(item.title, item.url)}
                         isActive={activeSection === item.title}
-                        className="px-2.5 md:px-2"
+                        className={cn(
+                          "h-9 w-9 p-0 justify-center rounded-lg mx-auto transition-colors",
+                          activeSection === item.title
+                            ? "bg-primary/10 text-primary hover:bg-primary/15 font-semibold"
+                            : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                        )}
                       >
-                        <item.icon />
+                        <item.icon className="h-4 w-4" />
                         <span className="md:hidden">{item.title}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -162,13 +167,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarGroup>
           </SidebarContent>
 
-          <SidebarFooter>
+          <SidebarFooter className="p-2 pb-3">
             <NavUser />
           </SidebarFooter>
         </Sidebar>
 
-        {/* Second Sidebar: Item list */}
-        <Sidebar collapsible="none" className="hidden flex-1 md:flex min-w-0">
+        <Sidebar
+          collapsible="none"
+          className="hidden md:flex shrink-0 w-[calc(var(--sidebar-width)_-_var(--sidebar-width-icon)_-_1px)] overflow-hidden transition-opacity duration-150 group-data-[collapsible=icon]:opacity-0"
+          style={{ width: "calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px)" }}
+        >
           <SidebarHeader className="gap-3 border-b p-3.5">
             <div className="flex w-full items-center justify-between">
               <span className="text-base font-semibold text-foreground tracking-tight">
@@ -176,17 +184,26 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </span>
             </div>
             <SidebarInput
+              id="sidebar-search-input"
+              name="search"
+              aria-label="Search conversations, channels or contacts"
               placeholder="Type to search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
             {activeSection === "Chats" && (
-              <div className="flex items-center gap-1.5 pt-0.5 overflow-x-auto no-scrollbar">
+              <div
+                role="tablist"
+                aria-label="Lọc cuộc trò chuyện"
+                className="flex items-center gap-1 pt-0.5 overflow-x-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              >
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={messageFilter === "all"}
                   onClick={() => setMessageFilter("all")}
                   className={cn(
-                    "px-2.5 py-1 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
+                    "px-2 py-0.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
                     messageFilter === "all"
                       ? "bg-primary text-primary-foreground shadow-xs"
                       : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -196,9 +213,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </button>
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={messageFilter === "unread"}
                   onClick={() => setMessageFilter("unread")}
                   className={cn(
-                    "inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
+                    "inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
                     messageFilter === "unread"
                       ? "bg-primary text-primary-foreground shadow-xs"
                       : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -220,9 +239,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </button>
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={messageFilter === "direct"}
                   onClick={() => setMessageFilter("direct")}
                   className={cn(
-                    "px-2.5 py-1 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
+                    "px-2 py-0.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
                     messageFilter === "direct"
                       ? "bg-primary text-primary-foreground shadow-xs"
                       : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -232,9 +253,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </button>
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={messageFilter === "group"}
                   onClick={() => setMessageFilter("group")}
                   className={cn(
-                    "px-2.5 py-1 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
+                    "px-2 py-0.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
                     messageFilter === "group"
                       ? "bg-primary text-primary-foreground shadow-xs"
                       : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -247,7 +270,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarHeader>
 
           <SidebarContent>
-            {/* Chats section */}
             {activeSection === "Chats" && (
               <SidebarGroup className="px-0">
                 <SidebarGroupContent>
@@ -276,8 +298,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           className={cn(
                             "flex flex-col items-start gap-2 border-b p-4 text-sm leading-tight whitespace-nowrap last:border-b-0 transition-all",
                             isActive
-                              ? "bg-primary/10 text-foreground font-medium border-l-2 border-l-primary pl-3.5 shadow-2xs"
-                              : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-muted-foreground hover:text-foreground"
+                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                              : "hover:bg-sidebar-accent/50 text-muted-foreground hover:text-foreground"
                           )}
                         >
                           <div className="flex w-full items-center gap-2">
@@ -303,7 +325,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </SidebarGroup>
             )}
 
-            {/* Channels section */}
             {activeSection === "Channels" && (
               <SidebarGroup className="px-0">
                 <SidebarGroupContent>
@@ -321,8 +342,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           className={cn(
                             "flex flex-col items-start gap-2 border-b p-4 text-sm leading-tight whitespace-nowrap last:border-b-0 w-full text-left transition-all",
                             isActive
-                              ? "bg-primary/10 text-foreground font-medium border-l-2 border-l-primary pl-3.5 shadow-2xs"
-                              : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-muted-foreground hover:text-foreground"
+                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                              : "hover:bg-sidebar-accent/50 text-muted-foreground hover:text-foreground"
                           )}
                         >
                           <div className="flex w-full items-center gap-2">
@@ -342,7 +363,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </SidebarGroup>
             )}
 
-            {/* Contacts section */}
             {activeSection === "Contacts" && (
               <SidebarGroup className="px-0">
                 <SidebarGroupContent>
@@ -373,7 +393,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </SidebarGroup>
             )}
 
-            {/* Settings section */}
             {activeSection === "Settings" && (
               <SidebarGroup className="px-0">
                 <SidebarGroupContent>

@@ -90,7 +90,6 @@ export function MessageItem({
         isCompact ? "py-0.5" : "py-1"
       )}
     >
-      {/* Avatar for received messages */}
       {!isSent && (
         <MessageAvatar>
           <Avatar className="h-8 w-8 shrink-0 border border-border">
@@ -102,18 +101,14 @@ export function MessageItem({
         </MessageAvatar>
       )}
 
-      {/* Message Content Container */}
       <MessageContent>
-        {/* Header with Sender Name in group or incoming */}
         {!isSent && showSenderName && (
           <MessageHeader>
             <span className="font-semibold text-muted-foreground">{message.senderName}</span>
           </MessageHeader>
         )}
 
-        {/* Bubble Row with hover actions */}
         <div className="relative flex items-center gap-1.5 group/bubble-row">
-          {/* Action Trigger on Hover for sent messages (left side) */}
           {isSent && !isDeleted && (
             <div
               className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 self-center order-first"
@@ -180,7 +175,6 @@ export function MessageItem({
             </div>
           )}
 
-          {/* Bubble Component */}
           <Bubble
             variant={
               isDeleted
@@ -212,6 +206,9 @@ export function MessageItem({
               ) : isEditing ? (
                 <div className="space-y-1.5 py-1 min-w-[200px]">
                   <textarea
+                    id="edit-message-textarea"
+                    name="editDraft"
+                    aria-label="Chỉnh sửa nội dung tin nhắn"
                     className="w-full text-xs sm:text-sm bg-background text-foreground border rounded p-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
                     value={editDraft}
                     onChange={(e) => setEditDraft(e.target.value)}
@@ -264,7 +261,6 @@ export function MessageItem({
                     </div>
                   )}
 
-                  {/* Attachments if any */}
                   {message.attachments && message.attachments.length > 0 && (
                     <div className="mt-2 space-y-1.5">
                       {message.attachments.map((att, idx) => (
@@ -284,7 +280,7 @@ export function MessageItem({
                         >
                           {att.type === "image" ? (
                             mediaUrl(att.url) ? (
-                              <img src={mediaUrl(att.url)} alt={att.name} className="h-16 w-16 rounded object-cover" />
+                              <img src={mediaUrl(att.url)} alt={att.name} width={64} height={64} className="h-16 w-16 rounded object-cover" />
                             ) : (
                               <ImageIcon className="h-4 w-4 shrink-0" />
                             )
@@ -302,7 +298,6 @@ export function MessageItem({
                 </>
               )}
 
-              {/* Time & Read Receipts */}
               <div
                 className={cn(
                   "flex items-center gap-1.5 mt-1 justify-end text-[10px]",
@@ -344,7 +339,6 @@ export function MessageItem({
             </BubbleContent>
           </Bubble>
 
-          {/* Action Trigger on Hover for received messages (right side) */}
           {!isSent && !isDeleted && (
             <div
               className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 self-center order-last"
@@ -382,7 +376,6 @@ export function MessageItem({
           )}
         </div>
 
-        {/* Reactions Row */}
         {!isDeleted && message.reactions && message.reactions.length > 0 && (
           <div
             className={cn(

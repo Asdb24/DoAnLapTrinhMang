@@ -110,12 +110,11 @@ export function MessageInputBar({
 
   return (
     <TooltipProvider delayDuration={150}>
-      <div className="p-3 sm:p-4 border-t bg-card/60 backdrop-blur-sm shrink-0">
+      <div className="p-3 sm:p-4 border-t bg-card shrink-0">
         {fileError && <p role="alert" className="mb-2 text-xs text-destructive">{fileError}</p>}
         {sending && <p role="status" className="mb-2 text-xs text-muted-foreground">Sending…</p>}
         {media&&<div className="flex items-center gap-3 mb-2"><div className="h-20 w-24 overflow-hidden"><MediaContent media={media}/></div><span className="text-xs text-muted-foreground">Ready to send {media.kind}</span><Button variant="ghost" size="icon" disabled={sending} aria-label="Remove selected media" onClick={()=>setMedia(null)}><X className="h-4 w-4"/></Button></div>}
 
-        {/* Attached Files Preview */}
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
             {attachments.map(({ id, file, status }) => (
@@ -140,17 +139,17 @@ export function MessageInputBar({
                   className="h-4 w-4 p-0 text-muted-foreground hover:text-foreground"
                   aria-label="Remove attachment"
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-3 w-4" />
                 </Button>
               </div>
             ))}
           </div>
         )}
 
-        {/* Main Input Box */}
         <div className="relative flex flex-wrap sm:flex-nowrap items-end gap-2 border rounded-xl bg-background p-1.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 transition-all">
-          {/* Hidden File Input */}
           <input
+            id="chat-file-input"
+            name="file"
             type="file"
             aria-label="Choose attachments"
             disabled={sending}
@@ -160,7 +159,6 @@ export function MessageInputBar({
             className="hidden"
           />
 
-          {/* Attach Button */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -178,8 +176,9 @@ export function MessageInputBar({
             <TooltipContent>Attach Files</TooltipContent>
           </Tooltip>
 
-          {/* Text Area */}
           <Textarea
+            id="chat-message-input"
+            name="message"
             ref={textareaRef}
             readOnly={sending}
             aria-label={`Message ${recipientName}`}
@@ -193,7 +192,6 @@ export function MessageInputBar({
             rows={1}
           />
 
-          {/* Emoji Popover */}
           <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -215,7 +213,6 @@ export function MessageInputBar({
           <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 text-xs font-semibold" aria-label="Add GIF" title="Add GIF" disabled={sending} onClick={()=>{setPickerTab('gif');setEmojiOpen(true);}}>GIF</Button>
           <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" aria-label="Add Sticker" title="Add Sticker" disabled={sending} onClick={()=>{setPickerTab('sticker');setEmojiOpen(true);}}><Sticker className="h-4 w-4"/></Button>
 
-          {/* Send Button */}
           <Button
             type="button"
             size="icon"

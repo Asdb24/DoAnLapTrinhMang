@@ -29,18 +29,14 @@ export default function RootLayout({
             }
             className="h-screen w-screen overflow-hidden"
           >
-            {/* Shadcn sidebar-09 AppSidebar */}
             <AppSidebar />
-
-            {/* Main Application Inset Area */}
             <SidebarInset className="flex flex-col h-screen overflow-hidden min-w-0">
-              <main className="flex-1 flex min-w-0 h-full overflow-hidden">
+              <div className="flex-1 flex min-w-0 h-full overflow-hidden">
                 {children}
-              </main>
+              </div>
             </SidebarInset>
           </SidebarProvider>
 
-          {/* Global New Message Dialog */}
           <NewMessageDialog />
         </ChatFlowProvider>
       </body>

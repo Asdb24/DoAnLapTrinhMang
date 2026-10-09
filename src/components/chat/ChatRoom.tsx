@@ -45,17 +45,21 @@ export function ChatRoom({ id }: { id: string }) {
 
   return (
     <div className="flex-1 flex h-full overflow-hidden bg-background">
-      {/* Main Conversation Column */}
       <div className="flex-1 flex flex-col min-w-0 h-full">
         <ChatHeader
           conversation={conversation}
           showDetails={showDetails}
           setShowDetails={setShowDetails}
         />
-        <div className="px-4 py-1 text-[11px] text-muted-foreground/80 flex items-center gap-1.5 border-b border-border/40 bg-card/30 shrink-0 select-none" role="status">
-          <span className={`inline-block h-1.5 w-1.5 rounded-full ${realtimeStatus === 'SUBSCRIBED' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
+        {realtimeStatus !== 'SUBSCRIBED' && !loadingMessages && (
+          <div className="px-4 py-1 text-[11px] text-amber-600 dark:text-amber-400 bg-amber-500/10 border-b border-amber-500/20 flex items-center gap-1.5 shrink-0 select-none">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+            <span>Reconnecting… Messages will sync when connected.</span>
+          </div>
+        )}
+        <span className="sr-only" role="status">
           {loadingMessages ? 'Loading messages…' : realtimeStatus === 'SUBSCRIBED' ? 'Connected · Live messages' : 'Reconnecting… Messages will sync when connected.'}
-        </div>
+        </span>
         <MessageHistory conversation={conversation} />
         {conversation.isArchived ? <div className="border-t bg-muted/30 p-4 text-center text-sm text-muted-foreground">Imported history · This conversation is read-only. Start a new conversation to send messages. <a href="/api/migrate" download="chatflow-browser-backup.json" className="ml-1 underline text-primary">Download imported backup</a></div> : <MessageInputBar
           key={conversation.id}
@@ -64,7 +68,6 @@ export function ChatRoom({ id }: { id: string }) {
         />}
       </div>
 
-      {/* Optional Collapsible Right Sidebar */}
       {showDetails && (
         <ChatRightSidebar
           conversation={conversation}
