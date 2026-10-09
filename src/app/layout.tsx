@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ChatFlowProvider } from "@/context/ChatFlowContext";
-import { LeftMainSidebar } from "@/components/layout/LeftMainSidebar";
+import { AppSidebar } from "@/components/app-sidebar";
 import { NewMessageDialog } from "@/components/dialogs/NewMessageDialog";
-import { appOrigin } from '@/lib/public-url.mjs';
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { appOrigin } from "@/lib/public-url.mjs";
 
 export const metadata: Metadata = {
   metadataBase: process.env.NEXT_PUBLIC_APP_URL ? new URL(appOrigin()) : undefined,
@@ -20,17 +21,22 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className="antialiased bg-background text-foreground h-screen w-screen overflow-hidden">
         <ChatFlowProvider>
-          <div className="flex h-screen w-screen overflow-hidden bg-background">
-            {/* Persistent Left Main Sidebar */}
-            <LeftMainSidebar />
+          <SidebarProvider
+            style={
+              {
+                "--sidebar-width": "350px",
+              } as React.CSSProperties
+            }
+            className="h-screen w-screen overflow-hidden"
+          >
+            <AppSidebar />
+            <SidebarInset className="flex flex-col h-screen overflow-hidden min-w-0">
+              <div className="flex-1 flex min-w-0 h-full overflow-hidden">
+                {children}
+              </div>
+            </SidebarInset>
+          </SidebarProvider>
 
-            {/* Main Application Area */}
-            <main className="flex-1 flex min-w-0 h-full overflow-hidden">
-              {children}
-            </main>
-          </div>
-
-          {/* Global New Message Dialog */}
           <NewMessageDialog />
         </ChatFlowProvider>
       </body>

@@ -46,8 +46,7 @@ export function ChatRightSidebar({
   const linkItems = shared.filter(m => m.type === "link");
 
   return (
-    <aside className="w-72 sm:w-80 border-l bg-card/80 backdrop-blur-sm flex flex-col h-full shrink-0 select-none animate-in slide-in-from-right-2 duration-200">
-      {/* Header */}
+    <aside className="w-72 sm:w-80 border-l bg-card flex flex-col h-full shrink-0 select-none animate-in slide-in-from-right-2 duration-200">
       <div className="h-16 px-4 border-b flex items-center justify-between">
         <h3 className="font-semibold text-sm">Conversation Details</h3>
         <Button
@@ -62,7 +61,6 @@ export function ChatRightSidebar({
       </div>
 
       <ScrollArea className="flex-1">
-        {/* Profile Card Summary */}
         <div className="p-4 flex flex-col items-center text-center border-b space-y-3">
           <Avatar className="h-20 w-20 border-2 border-border shadow-xs">
             <AvatarImage src={conversation.avatar} alt={conversation.name} />
@@ -85,7 +83,6 @@ export function ChatRightSidebar({
             )}
           </div>
 
-          {/* Quick Actions */}
           <div className="flex items-center gap-2 pt-1">
             <Button
               variant={isMuted ? "secondary" : "outline"}
@@ -138,7 +135,6 @@ export function ChatRightSidebar({
           </div>
         </div>
 
-        {/* Tabbed Content: Media, Files, Links */}
         <div className="p-4">
           <Tabs defaultValue="files" className="w-full">
             <TabsList className="grid w-full grid-cols-3 h-8">
@@ -153,7 +149,6 @@ export function ChatRightSidebar({
               </TabsTrigger>
             </TabsList>
 
-            {/* Files Tab */}
             <TabsContent value="files" className="pt-3 space-y-2">
               {fileItems.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-6">
@@ -180,7 +175,6 @@ export function ChatRightSidebar({
               )}
             </TabsContent>
 
-            {/* Media Tab */}
             <TabsContent value="media" className="pt-3">
               {mediaItems.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-6">
@@ -199,6 +193,9 @@ export function ChatRightSidebar({
                       <img
                         src={mediaUrl(item.url)}
                         alt={item.name}
+                        width={140}
+                        height={140}
+                        loading="lazy"
                         className="object-cover w-full h-full group-hover:scale-105 transition-transform"
                       />
                       <div className="absolute inset-x-0 bottom-0 bg-background/80 backdrop-blur-xs p-1 text-[10px] truncate text-foreground">
@@ -210,7 +207,6 @@ export function ChatRightSidebar({
               )}
             </TabsContent>
 
-            {/* Links Tab */}
             <TabsContent value="links" className="pt-3 space-y-2">
               {linkItems.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-6">
@@ -233,7 +229,6 @@ export function ChatRightSidebar({
             </TabsContent>
           </Tabs>
 
-          {/* Mutual Groups / Workspace details */}
           <div className="mt-6 pt-4 border-t space-y-2">
             <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Your Channels

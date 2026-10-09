@@ -1,14 +1,23 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { MessageSquare, ArrowRight } from "lucide-react";
-
+import React, { useRef, useState } from "react";
+import { Command } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 interface Props {
-  authenticate: (mode: "login" | "register", values: { email: string; password: string; displayName: string }) => Promise<boolean>;
+  authenticate: (
+    mode: "login" | "register",
+    values: { email: string; password: string; displayName: string }
+  ) => Promise<boolean>;
   pending: boolean;
   error: string | null;
   notice?: string | null;
@@ -16,39 +25,180 @@ interface Props {
   resetPassword?: (email: string) => Promise<boolean>;
 }
 
-export function AuthScreen({ authenticate, pending, error, notice, dismissError, resetPassword }: Props) {
+export function AuthScreen({
+  authenticate,
+  pending,
+  error,
+  notice,
+  dismissError,
+  resetPassword,
+}: Props) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const passwordRef = useRef<HTMLInputElement>(null);
-  const submit = async (selected: "login" | "register") => {
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (pending) return;
-    if (!await authenticate(selected, { email, password, displayName })) passwordRef.current?.focus();
+    const ok = await authenticate(mode, { email, password, displayName });
+    if (!ok) passwordRef.current?.focus();
   };
-  return <main className="min-h-screen w-full overflow-y-auto bg-background flex items-center justify-center p-6">
-    <div className="w-full max-w-md space-y-8 py-8">
-      <div className="space-y-4 text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm"><MessageSquare className="h-7 w-7" /></div>
-        <p className="text-sm font-semibold tracking-wide text-primary">ChatFlow</p>
-        <h1 className="text-3xl font-bold tracking-tight">{mode === "login" ? "Your team, in sync." : "Make room for your team."}</h1>
-        <p className="text-sm text-muted-foreground">Conversations, ideas, and the people behind them. All together.</p>
-      </div>
-      <div className="rounded-2xl border bg-card p-6 shadow-sm space-y-5">
-        <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
-          {(["login", "register"] as const).map(value => <Button key={value} variant={mode === value ? "secondary" : "ghost"} disabled={pending} onClick={() => { setMode(value); dismissError(); }}>{value === "login" ? "Sign in" : "Create account"}</Button>)}
+
+  return (
+    <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted/40 p-6 md:p-10 select-none">
+      <div className="flex w-full max-w-sm flex-col gap-6">
+        <div className="flex items-center gap-2 self-center font-medium">
+          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <Command className="size-4" />
+          </div>
+          <span className="font-semibold text-sm">ChatFlow</span>
         </div>
-        <form className="space-y-4" onSubmit={async event => { event.preventDefault(); await submit(mode); }}>
-          {mode === "register" && <div className="space-y-2"><Label htmlFor="auth-name">Display name</Label><Input id="auth-name" autoComplete="name" required value={displayName} readOnly={pending} onChange={e => setDisplayName(e.target.value)} /></div>}
-          <div className="space-y-2"><Label htmlFor="auth-email">Email</Label><Input id="auth-email" type="email" autoComplete="email" required value={email} readOnly={pending} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" /></div>
-          <div className="space-y-2"><Label htmlFor="auth-password">Password</Label><Input ref={passwordRef} id="auth-password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={mode === "register" ? 10 : undefined} value={password} readOnly={pending} onChange={e => setPassword(e.target.value)} /></div>
-          {error && <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm"><p>{error}</p><button type="button" className="mt-2 underline" onClick={dismissError}>Dismiss error</button></div>}
-          <Button type="submit" className="w-full gap-2" disabled={pending}>{pending ? "Connecting…" : mode === "login" ? "Continue to workspace" : "Create your account"}<ArrowRight className="h-4 w-4" /></Button>
-        </form>
-        {mode==='login'&&resetPassword&&<Button type="button" variant="link" className="w-full" disabled={pending||!email.trim()} onClick={()=>void resetPassword(email)}>Forgot password?</Button>}
-        {notice && <p role="status" className="text-sm text-primary">{notice}</p>}
+
+        <div className="flex flex-col gap-6">
+          <Card>
+            <CardHeader className="text-center pb-4">
+              <CardTitle className="text-xl">
+                {mode === "login" ? "Welcome back" : "Create an account"}
+              </CardTitle>
+              <CardDescription>
+                {mode === "login"
+                  ? "Enter your credentials to access your workspace"
+                  : "Enter your information to get started"}
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent>
+              {/* Tab switcher matching login-03 button group */}
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 mb-6">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={mode === "login" ? "secondary" : "ghost"}
+                  disabled={pending}
+                  onClick={() => {
+                    setMode("login");
+                    dismissError();
+                  }}
+                  className="text-xs"
+                >
+                  Sign in
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={mode === "register" ? "secondary" : "ghost"}
+                  disabled={pending}
+                  onClick={() => {
+                    setMode("register");
+                    dismissError();
+                  }}
+                  className="text-xs"
+                >
+                  Create account
+                </Button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {mode === "register" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="auth-name">Display name</Label>
+                    <Input
+                      id="auth-name"
+                      type="text"
+                      placeholder="Alex Smith"
+                      autoComplete="name"
+                      required
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      readOnly={pending}
+                      disabled={pending}
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="auth-email">Email</Label>
+                  <Input
+                    id="auth-email"
+                    type="email"
+                    placeholder="m@example.com"
+                    required
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    readOnly={pending}
+                    disabled={pending}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="auth-password">Password</Label>
+                    {mode === "login" && resetPassword && (
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="p-0 h-auto text-xs text-muted-foreground underline-offset-4 hover:underline"
+                        disabled={pending || !email.trim()}
+                        onClick={() => void resetPassword(email)}
+                      >
+                        Forgot password?
+                      </Button>
+                    )}
+                  </div>
+                  <Input
+                    id="auth-password"
+                    ref={passwordRef}
+                    type="password"
+                    autoComplete={mode === "login" ? "current-password" : "new-password"}
+                    required
+                    minLength={mode === "register" ? 10 : undefined}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    readOnly={pending}
+                    disabled={pending}
+                  />
+                </div>
+
+                {error && (
+                  <div
+                    role="alert"
+                    className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center justify-between"
+                  >
+                    <span>{error}</span>
+                    <button
+                      type="button"
+                      onClick={dismissError}
+                      className="underline text-[10px] ml-2 shrink-0 cursor-pointer"
+                    >
+                      Dismiss error
+                    </button>
+                  </div>
+                )}
+
+                {notice && (
+                  <div
+                    role="status"
+                    className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-xs text-primary"
+                  >
+                    {notice}
+                  </div>
+                )}
+
+                <Button type="submit" className="w-full mt-2" disabled={pending}>
+                  {pending
+                    ? "Connecting…"
+                    : mode === "login"
+                    ? "Continue to workspace"
+                    : "Create your account"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
-  </main>;
+  );
 }
-

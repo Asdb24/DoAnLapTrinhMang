@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Select,
   SelectContent,
@@ -115,6 +116,7 @@ export function SettingsView() {
       {/* Left Vertical Settings Navigation */}
       <nav className="w-full md:w-64 border-b md:border-b-0 md:border-r bg-card/40 p-4 shrink-0 flex md:flex-col gap-1 overflow-x-auto select-none">
         <div className="hidden md:block mb-3 px-2">
+          <SidebarTrigger className="-ml-2 mb-2 inline-flex" />
           <h2 className="text-lg font-bold tracking-tight">Settings</h2>
           <p className="text-xs text-muted-foreground">Manage your account & app preferences</p>
         </div>

@@ -1,7 +1,7 @@
 # ChatFlow — Ứng Dụng Nhắn Tin Thời Gian Thực Phân Tán (Đồ Án Lập Trình Mạng)
 
-[![Release v0.1.1](https://img.shields.io/badge/release-v0.1.1-blue.svg)](https://github.com/Asdb24/DoAnLapTrinhMang/releases/tag/v0.1.1)
-[![Platform Windows](https://img.shields.io/badge/platform-Windows%20x64-green.svg)](https://github.com/Asdb24/DoAnLapTrinhMang/releases/tag/v0.1.1)
+[![Release v0.2.0](https://img.shields.io/badge/release-v0.2.0-blue.svg)](https://github.com/Asdb24/DoAnLapTrinhMang/releases/tag/v0.2.0)
+[![Platform Windows](https://img.shields.io/badge/platform-Windows%20x64-green.svg)](https://github.com/Asdb24/DoAnLapTrinhMang/releases/tag/v0.2.0)
 [![Protocol RFC 6455](https://img.shields.io/badge/protocol-RFC%206455%20WebSocket-orange.svg)](docs/TECHNICAL_DOCUMENTATION.md)
 [![Database Supabase PostgreSQL](https://img.shields.io/badge/database-PostgreSQL%20RLS-336791.svg)](docs/API.md)
 [![Build Status](https://img.shields.io/badge/tests-344%20passed-brightgreen.svg)](docs/VERIFICATION.md)
@@ -24,9 +24,9 @@ ChatFlow là ứng dụng nhắn tin và cộng tác nhóm thời gian thực ph
 
 Ứng dụng Windows Desktop đã được đóng gói tự động qua GitHub Actions CI/CD và kết nối sẵn với máy chủ Cloud thật (không cần cấu hình `.env`):
 
-* 📦 **Tải bản cài đặt NSIS:** [ChatFlow.Setup.0.1.1.exe](https://github.com/Asdb24/DoAnLapTrinhMang/releases/download/v0.1.1/ChatFlow.Setup.0.1.1.exe)
-* ⚡ **Tải bản Portable (Chạy ngay không cần cài đặt):** [ChatFlow.0.1.1.exe](https://github.com/Asdb24/DoAnLapTrinhMang/releases/download/v0.1.1/ChatFlow.0.1.1.exe)
-* 🔗 **Trang phát hành chính thức:** [GitHub Releases v0.1.1](https://github.com/Asdb24/DoAnLapTrinhMang/releases/tag/v0.1.1)
+* 📦 **Tải bản cài đặt NSIS:** [ChatFlow Setup 0.2.0.exe](https://github.com/Asdb24/DoAnLapTrinhMang/releases/download/v0.2.0/ChatFlow%20Setup%200.2.0.exe)
+* ⚡ **Tải bản Portable (Chạy ngay không cần cài đặt):** [ChatFlow 0.2.0.exe](https://github.com/Asdb24/DoAnLapTrinhMang/releases/download/v0.2.0/ChatFlow%200.2.0.exe)
+* 🔗 **Trang phát hành chính thức:** [GitHub Releases v0.2.0](https://github.com/Asdb24/DoAnLapTrinhMang/releases/tag/v0.2.0)
 
 ---
 

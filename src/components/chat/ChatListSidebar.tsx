@@ -40,9 +40,8 @@ export function ChatListSidebar() {
     <aside
       className={`${
         activeId ? "hidden md:flex" : "flex"
-      } w-full md:w-80 border-r bg-card/60 backdrop-blur-sm flex-col h-full shrink-0 select-none`}
+      } w-full md:w-80 border-r bg-card flex-col h-full shrink-0 select-none`}
     >
-      {/* Top Header */}
       <div className="p-4 border-b space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -62,10 +61,12 @@ export function ChatListSidebar() {
           </Button>
         </div>
 
-        {/* Search Bar */}
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
+            id="chatlist-search-input"
+            name="search"
+            aria-label="Search conversations"
             placeholder="Search conversations..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -73,7 +74,6 @@ export function ChatListSidebar() {
           />
         </div>
 
-        {/* Filter Tabs */}
         <Tabs
           value={filterTab}
           onValueChange={(v) => setFilterTab(v as any)}
@@ -93,7 +93,6 @@ export function ChatListSidebar() {
         </Tabs>
       </div>
 
-      {/* Scrollable Conversation List */}
       <ScrollArea className="flex-1 p-2">
         {filteredConversations.length === 0 ? (
           <div className="p-6 text-center text-xs text-muted-foreground">

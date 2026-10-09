@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CreateChannelDialog } from "./CreateChannelDialog";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Hash,
   Lock,
@@ -66,6 +67,7 @@ export function ChannelsView() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
+              <SidebarTrigger className="-ml-2 mr-1 hidden md:inline-flex" />
               <h1 className="text-2xl font-bold tracking-tight">Channels & Groups</h1>
               <UserStatusBadge status={settings.presence || "online"} />
             </div>

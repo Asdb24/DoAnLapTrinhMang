@@ -3,6 +3,7 @@
 import React, { useRef, useEffect, useCallback } from "react";
 import { Conversation, MessageType } from "@/types";
 import { MessageItem } from "./MessageItem";
+import { MessageGroup } from "@/components/ui/message";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useChatFlow } from "@/context/ChatFlowContext";
@@ -68,29 +69,47 @@ export function MessageHistory({ conversation }: MessageHistoryProps) {
         ) : (
           dateSections.map(({ date, messages }) => (
             <div key={messages[0].id} className="space-y-3">
-              {/* Date Separator */}
               <div className="relative flex items-center justify-center my-4">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-border" />
                 </div>
                 <Badge
                   variant="outline"
-                  className="relative bg-background text-muted-foreground text-[11px] font-medium px-2.5 py-0.5"
+                  className="relative bg-background text-muted-foreground text-[11px] font-medium px-2.5 py-0.5 rounded-full border-border/80 shadow-2xs"
                 >
                   {date}
                 </Badge>
               </div>
 
-              {/* Messages for this date */}
-              <div className="space-y-1">
-                {messages.map((msg) => (
-                  <MessageItem
-                    key={msg.id}
-                    message={msg}
-                    conversationId={conversation.id}
-                    showSenderName={conversation.type === "group"}
-                  />
-                ))}
+              <div className="space-y-3">
+                {(() => {
+                  const groups: MessageType[][] = [];
+                  for (const msg of messages) {
+                    const lastGroup = groups[groups.length - 1];
+                    const lastMsg = lastGroup?.[lastGroup.length - 1];
+                    if (
+                      lastMsg &&
+                      (lastMsg.senderId === msg.senderId ||
+                        (Boolean(lastMsg.isSentByMe) && Boolean(msg.isSentByMe)))
+                    ) {
+                      lastGroup.push(msg);
+                    } else {
+                      groups.push([msg]);
+                    }
+                  }
+                  return groups.map((grp, gIdx) => (
+                    <MessageGroup key={grp[0].id || gIdx} className="gap-1">
+                      {grp.map((msg, mIdx) => (
+                        <MessageItem
+                          key={msg.id}
+                          message={msg}
+                          conversationId={conversation.id}
+                          showSenderName={conversation.type === "group" && mIdx === 0}
+                        />
+                      ))}
+                    </MessageGroup>
+                  ));
+                })()}
               </div>
             </div>
           ))

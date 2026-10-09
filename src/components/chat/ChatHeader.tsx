@@ -19,6 +19,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 
 interface ChatHeaderProps {
   conversation: Conversation;
@@ -33,9 +34,9 @@ export function ChatHeader({
 }: ChatHeaderProps) {
   return (
     <TooltipProvider delayDuration={150}>
-      <header className="h-16 px-4 border-b bg-card/50 backdrop-blur-sm flex items-center justify-between shrink-0 select-none">
-        {/* Recipient / Group Info */}
+      <header className="h-16 px-4 border-b bg-card flex items-center justify-between shrink-0 select-none">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <SidebarTrigger className="-ml-1 hidden md:inline-flex" />
           <Link
             href="/"
             className="md:hidden p-1.5 -ml-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -77,7 +78,6 @@ export function ChatHeader({
           </div>
         </div>
 
-        {/* Action Buttons */}
         <div className="flex items-center gap-1">
           <Tooltip>
             <TooltipTrigger asChild>

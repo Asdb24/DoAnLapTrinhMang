@@ -18,4 +18,11 @@ if (fs.existsSync(standaloneDir)) {
     fs.cpSync(publicSrc, publicDest, { recursive: true });
     console.log('[standalone] Copied public -> .next/standalone/public');
   }
+
+  const envSrc = path.join(root, '.env.local');
+  const envDest = path.join(standaloneDir, '.env.local');
+  if (fs.existsSync(envSrc)) {
+    fs.copyFileSync(envSrc, envDest);
+    console.log('[standalone] Copied .env.local -> .next/standalone/.env.local');
+  }
 }
