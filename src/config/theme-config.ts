@@ -24,6 +24,8 @@ export interface ThemeColors {
   border: string;
   input: string;
   ring: string;
+  hover: string;
+  active: string;
   sidebar: {
     background: string;
     foreground: string;
@@ -71,6 +73,8 @@ export const themeConfig: ThemeConfig = {
       border: "hsl(214.3, 31.8%, 91.4%)",      // #e2e8f0 - refined subtle border
       input: "hsl(214.3, 31.8%, 91.4%)",
       ring: "hsl(221.2, 83.2%, 53.3%)",
+      hover: "hsl(214, 95%, 93%)",
+      active: "hsl(217, 91%, 90%)",
       sidebar: {
         background: "hsl(210, 33%, 99%)",      // #fcfdfe - clean sidebar rail
         foreground: "hsl(215.4, 16.3%, 46.9%)",
@@ -102,6 +106,8 @@ export const themeConfig: ThemeConfig = {
       border: "hsl(217.2, 32.6%, 17.5%)",
       input: "hsl(217.2, 32.6%, 17.5%)",
       ring: "hsl(224.3, 76.3%, 48%)",
+      hover: "hsl(217.2, 32.6%, 17.5%)",
+      active: "hsl(217.2, 32.6%, 22%)",
       sidebar: {
         background: "hsl(222.2, 84%, 4.9%)",
         foreground: "hsl(215, 20.2%, 65.1%)",

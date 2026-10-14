@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { mediaUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { motion } from "motion/react";
+import { spring } from "@/lib/springs";
 import { isUnconfirmed } from "@/services/messages";
 import { MediaContent } from "./MediaContent";
 import {
@@ -131,14 +133,17 @@ export function MessageItem({
                   className="p-1.5 w-auto flex items-center gap-1 bg-card border-border shadow-md"
                 >
                   {COMMON_EMOJIS.map((emoji) => (
-                    <button
+                    <motion.button
                       key={emoji}
                       disabled={pending || archived}
                       onClick={() => handleReact(emoji)}
-                      className="h-7 w-7 rounded hover:bg-muted text-base flex items-center justify-center transition-transform hover:scale-125"
+                      whileHover={{ scale: 1.25 }}
+                      whileTap={{ scale: 0.95 }}
+                      transition={spring.fast}
+                      className="h-7 w-7 rounded hover:bg-muted text-base flex items-center justify-center focus-visible:outline-none"
                     >
                       {emoji}
-                    </button>
+                    </motion.button>
                   ))}
                 </PopoverContent>
               </Popover>

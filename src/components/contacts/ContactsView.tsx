@@ -12,12 +12,18 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UserStatusIndicator, UserStatusBadge } from "@/components/common/UserStatusIndicator";
 import { Search, MessageSquare, Mail, UserPlus, Users, ShieldAlert, ShieldCheck } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { useFluidHover } from "@/hooks/use-fluid-hover";
+import { FluidHoverHighlight } from "@/components/fluid-hover-highlight";
+import { GhostSpan } from "@/lib/font-weight";
 
 export function ContactsView() {
   const { contacts, startDirectChat, pending, blockedUsers, blockUser, unblockUser } = useChatFlow();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "online">("all");
   const router = useRouter();
+
+  const gridRef = React.useRef<HTMLDivElement>(null);
+  const gridHover = useFluidHover(gridRef, { axis: "xy" });
 
   const filteredContacts = contacts.filter((contact) => {
     const matchesQuery =
@@ -105,82 +111,92 @@ export function ContactsView() {
             No contacts match your query.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredContacts.map((contact) => (
-              <Card
+          <div ref={gridRef} {...gridHover.handlers} className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <FluidHoverHighlight hover={gridHover} className="rounded-xl bg-accent/40 dark:bg-accent/30" />
+            {filteredContacts.map((contact, index) => (
+              <div
                 key={contact.id}
-                className="flex flex-col justify-between border-border bg-card/60 hover:bg-card transition-colors hover:shadow-sm"
+                ref={(el) => gridHover.registerItem(index, el)}
+                className="relative z-10 flex"
               >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="relative">
-                      <Avatar className="h-12 w-12 border-2 border-border">
-                        <AvatarImage src={contact.avatar} alt={contact.name} />
-                        <AvatarFallback className="font-bold bg-secondary text-secondary-foreground">
-                          {contact.name.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="absolute bottom-0 right-0">
-                        <UserStatusIndicator status={contact.presence} size="sm" />
-                      </span>
+                <Card
+                  className="flex flex-col justify-between w-full border-border bg-card/70 transition-colors shadow-2xs rounded-xl"
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="relative">
+                        <Avatar className="h-12 w-12 border-2 border-border">
+                          <AvatarImage src={contact.avatar} alt={contact.name} />
+                          <AvatarFallback className="font-bold bg-secondary text-secondary-foreground">
+                            {contact.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="absolute bottom-0 right-0">
+                          <UserStatusIndicator status={contact.presence} size="sm" />
+                        </span>
+                      </div>
+
+                      <UserStatusBadge status={contact.presence} />
                     </div>
 
-                    <UserStatusBadge status={contact.presence} />
-                  </div>
-
-                  <div className="space-y-1 mt-3">
-                    <CardTitle className="text-base font-bold">{contact.name}</CardTitle>
-                    <p className="text-xs text-primary font-medium">{contact.role}</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
-                      <Mail className="h-3 w-3" />
-                      {contact.email}
-                    </p>
-                  </div>
-
-                  <CardDescription className="text-xs line-clamp-2 mt-2 leading-relaxed">
-                    {contact.bio}
-                  </CardDescription>
-
-                  {contact.customStatus && (
-                    <div className="mt-2 text-[11px] text-muted-foreground italic bg-muted/40 px-2 py-1 rounded">
-                      "{contact.customStatus}"
+                    <div className="space-y-1 mt-3">
+                      <CardTitle className="text-base font-bold">
+                        <GhostSpan active={contact.presence === "online"} activeWeight="bold" restingWeight="semibold">
+                          {contact.name}
+                        </GhostSpan>
+                      </CardTitle>
+                      <p className="text-xs text-primary font-medium">{contact.role}</p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
+                        <Mail className="h-3 w-3" />
+                        {contact.email}
+                      </p>
                     </div>
-                  )}
-                </CardHeader>
 
-                <CardFooter className="pt-2 border-t flex items-center gap-2">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="flex-1 gap-2 text-xs"
-                    disabled={pending}
-                    onClick={() => handleStartChat(contact.id)}
-                  >
-                    <MessageSquare className="h-3.5 w-3.5" />
-                    Direct Message
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`text-xs px-2.5 ${blockedUsers.some(b => b.id === contact.id) ? "text-primary border-primary/40" : "text-destructive border-destructive/30 hover:bg-destructive/10"}`}
-                    disabled={pending}
-                    title={blockedUsers.some(b => b.id === contact.id) ? "Unblock contact" : "Block contact"}
-                    onClick={async () => {
-                      if (blockedUsers.some(b => b.id === contact.id)) {
-                        await unblockUser(contact.id);
-                      } else {
-                        await blockUser(contact.id);
-                      }
-                    }}
-                  >
-                    {blockedUsers.some(b => b.id === contact.id) ? (
-                      <ShieldCheck className="h-3.5 w-3.5 text-green-500" />
-                    ) : (
-                      <ShieldAlert className="h-3.5 w-3.5" />
+                    <CardDescription className="text-xs line-clamp-2 mt-2 leading-relaxed">
+                      {contact.bio}
+                    </CardDescription>
+
+                    {contact.customStatus && (
+                      <div className="mt-2 text-[11px] text-muted-foreground italic bg-muted/40 px-2 py-1 rounded">
+                        "{contact.customStatus}"
+                      </div>
                     )}
-                  </Button>
-                </CardFooter>
-              </Card>
+                  </CardHeader>
+
+                  <CardFooter className="pt-2 border-t flex items-center gap-2">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="flex-1 gap-2 text-xs h-7 rounded-md"
+                      disabled={pending}
+                      onClick={() => handleStartChat(contact.id)}
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      Direct Message
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`text-xs px-2.5 h-7 rounded-md ${blockedUsers.some(b => b.id === contact.id) ? "text-primary border-primary/40" : "text-destructive border-destructive/30 hover:bg-destructive/10"}`}
+                      disabled={pending}
+                      title={blockedUsers.some(b => b.id === contact.id) ? "Unblock contact" : "Block contact"}
+                      onClick={async () => {
+                        if (blockedUsers.some(b => b.id === contact.id)) {
+                          await unblockUser(contact.id);
+                        } else {
+                          await blockUser(contact.id);
+                        }
+                      }}
+                    >
+                      {blockedUsers.some(b => b.id === contact.id) ? (
+                        <ShieldCheck className="h-3.5 w-3.5 text-green-500" />
+                      ) : (
+                        <ShieldAlert className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </div>
             ))}
           </div>
         )}

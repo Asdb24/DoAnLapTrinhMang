@@ -4,6 +4,7 @@ import { ChatFlowProvider } from "@/context/ChatFlowContext";
 import { AppSidebar } from "@/components/app-sidebar";
 import { NewMessageDialog } from "@/components/dialogs/NewMessageDialog";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { MotionProvider } from "@/components/motion-provider";
 import { appOrigin } from "@/lib/public-url.mjs";
 
 export const metadata: Metadata = {
@@ -20,8 +21,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="antialiased bg-background text-foreground h-screen w-screen overflow-hidden">
-        <ChatFlowProvider>
-          <SidebarProvider
+        <MotionProvider>
+          <ChatFlowProvider>
+            <SidebarProvider
             style={
               {
                 "--sidebar-width": "350px",
@@ -39,6 +41,7 @@ export default function RootLayout({
 
           <NewMessageDialog />
         </ChatFlowProvider>
+      </MotionProvider>
       </body>
     </html>
   );

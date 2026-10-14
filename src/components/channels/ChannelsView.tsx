@@ -31,6 +31,9 @@ import {
   CheckCircle2,
   MessageSquare,
 } from "lucide-react";
+import { useFluidHover } from "@/hooks/use-fluid-hover";
+import { FluidHoverHighlight } from "@/components/fluid-hover-highlight";
+import { GhostSpan } from "@/lib/font-weight";
 
 export function ChannelsView() {
   const { channels, toggleJoinChannel, openChannelChat, settings, pending } = useChatFlow();
@@ -40,6 +43,9 @@ export function ChannelsView() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const router = useRouter();
+
+  const gridRef = React.useRef<HTMLDivElement>(null);
+  const gridHover = useFluidHover(gridRef, { axis: "xy" });
 
   const handleOpenChannel = async (channelId: string) => {
     if (pending) return;
@@ -164,90 +170,98 @@ export function ChannelsView() {
             </Button>
           </div>
         ) : viewMode === "grid" ? (
-          /* Grid View */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredChannels.map((channel) => (
-              <Card
+          /* Grid View with 2D Fluid Hover */
+          <div ref={gridRef} {...gridHover.handlers} className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <FluidHoverHighlight hover={gridHover} className="rounded-xl bg-accent/40 dark:bg-accent/30" />
+            {filteredChannels.map((channel, index) => (
+              <div
                 key={channel.id}
-                className="flex flex-col justify-between border-border bg-card/60 hover:bg-card transition-colors hover:shadow-sm"
+                ref={(el) => gridHover.registerItem(index, el)}
+                className="relative z-10 flex"
               >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="h-9 w-9 rounded-lg bg-secondary flex items-center justify-center shrink-0">
-                        {channel.isPrivate ? (
-                          <Lock className="h-4 w-4 text-primary" />
-                        ) : (
-                          <Hash className="h-4 w-4 text-primary" />
-                        )}
+                <Card
+                  className="flex flex-col justify-between w-full border-border bg-card/70 transition-colors shadow-2xs rounded-xl"
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="h-9 w-9 rounded-lg bg-secondary flex items-center justify-center shrink-0">
+                          {channel.isPrivate ? (
+                            <Lock className="h-4 w-4 text-primary" />
+                          ) : (
+                            <Hash className="h-4 w-4 text-primary" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <CardTitle className="text-sm font-bold truncate">
+                            <GhostSpan active={channel.isJoined} activeWeight="semibold" restingWeight="medium">
+                              {channel.name}
+                            </GhostSpan>
+                          </CardTitle>
+                          <span className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Users className="h-3 w-3" />
+                            {channel.subscriberCount} members
+                          </span>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <CardTitle className="text-sm font-bold truncate">
-                          {channel.name}
-                        </CardTitle>
-                        <span className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                          <Users className="h-3 w-3" />
-                          {channel.subscriberCount} members
-                        </span>
-                      </div>
+
+                      <Badge variant="secondary" className="text-[10px] font-normal shrink-0">
+                        {channel.category}
+                      </Badge>
+                    </div>
+                    <CardDescription className="text-xs line-clamp-2 mt-2 leading-relaxed">
+                      {channel.description}
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardFooter className="pt-2 border-t flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      {channel.isJoined && (
+                        <>
+                          <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                          <span>Joined</span>
+                        </>
+                      )}
                     </div>
 
-                    <Badge variant="secondary" className="text-[10px] font-normal shrink-0">
-                      {channel.category}
-                    </Badge>
-                  </div>
-                  <CardDescription className="text-xs line-clamp-2 mt-2 leading-relaxed">
-                    {channel.description}
-                  </CardDescription>
-                </CardHeader>
-
-                <CardFooter className="pt-2 border-t flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    {channel.isJoined && (
-                      <>
-                        <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                        <span>Joined</span>
-                      </>
-                    )}
-                  </div>
-
-                  {channel.isJoined ? (
-                    <div className="flex items-center gap-1.5">
+                    {channel.isJoined ? (
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={pending}
+                          onClick={() => handleOpenChannel(channel.id)}
+                          className="h-7 px-3 text-xs gap-1 rounded-md"
+                        >
+                          <MessageSquare className="h-3 w-3" />
+                          Chat
+                        </Button>
+                        {channel.isOwner && <Button size="sm" variant="outline" className="h-7 px-3 text-xs rounded-md" onClick={() => setInviteChannel(channel)}>Invite</Button>}
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          title={channel.isOwner ? "Channel owners cannot leave their channel" : undefined}
+                          disabled={pending || channel.isOwner}
+                          onClick={async () => { await toggleJoinChannel(channel.id); }}
+                          className="h-7 px-3 text-xs rounded-md"
+                        >
+                          Leave
+                        </Button>
+                      </div>
+                    ) : (
                       <Button
-                        variant="outline"
+                        variant="default"
                         size="sm"
                         disabled={pending}
-                        onClick={() => handleOpenChannel(channel.id)}
-                        className="h-8 text-xs gap-1"
-                      >
-                        <MessageSquare className="h-3 w-3" />
-                        Chat
-                      </Button>
-                      {channel.isOwner && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setInviteChannel(channel)}>Invite</Button>}
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        title={channel.isOwner ? "Channel owners cannot leave their channel" : undefined}
-                        disabled={pending || channel.isOwner}
                         onClick={async () => { await toggleJoinChannel(channel.id); }}
-                        className="h-8 text-xs"
+                        className="h-7 px-3 text-xs rounded-md"
                       >
-                        Leave
+                        Join
                       </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      disabled={pending}
-                        onClick={async () => { await toggleJoinChannel(channel.id); }}
-                      className="h-8 text-xs"
-                    >
-                      Join
-                    </Button>
-                  )}
-                </CardFooter>
-              </Card>
+                    )}
+                  </CardFooter>
+                </Card>
+              </div>
             ))}
           </div>
         ) : (

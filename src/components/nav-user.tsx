@@ -9,6 +9,8 @@ import {
   Settings,
   Sun,
 } from "lucide-react"
+import { motion } from "motion/react"
+import { spring } from "@/lib/springs"
 
 import {
   Avatar,
@@ -109,17 +111,25 @@ export function NavUser() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleToggleTheme} className="cursor-pointer">
-                {isDark ? (
-                  <>
-                    <Sun className="mr-2 h-4 w-4" />
-                    Switch to Light Mode
-                  </>
-                ) : (
-                  <>
-                    <Moon className="mr-2 h-4 w-4" />
-                    Switch to Dark Mode
-                  </>
-                )}
+                <span className="grid mr-2 w-4 h-4 shrink-0">
+                  <motion.span
+                    className="col-start-1 row-start-1 flex items-center justify-center"
+                    initial={false}
+                    animate={isDark ? { opacity: 1, scale: 1, filter: "blur(0px)" } : { opacity: 0, scale: 0.6, filter: "blur(4px)" }}
+                    transition={isDark ? { type: "tween", duration: spring.fast.duration, ease: "easeOut" } : spring.fast.exit}
+                  >
+                    <Sun className="h-4 w-4" />
+                  </motion.span>
+                  <motion.span
+                    className="col-start-1 row-start-1 flex items-center justify-center"
+                    initial={false}
+                    animate={isDark ? { opacity: 0, scale: 0.6, filter: "blur(4px)" } : { opacity: 1, scale: 1, filter: "blur(0px)" }}
+                    transition={isDark ? spring.fast.exit : { type: "tween", duration: spring.fast.duration, ease: "easeOut" }}
+                  >
+                    <Moon className="h-4 w-4" />
+                  </motion.span>
+                </span>
+                <span>{isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}</span>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

@@ -12,6 +12,11 @@ import { Badge } from "@/components/ui/badge";
 import { UserStatusIndicator } from "@/components/common/UserStatusIndicator";
 import { Search, Users, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { motion } from "motion/react";
+import { spring } from "@/lib/springs";
+import { useFluidHover } from "@/hooks/use-fluid-hover";
+import { FluidHoverHighlight } from "@/components/fluid-hover-highlight";
+import { GhostSpan } from "@/lib/font-weight";
 
 export function ChatListSidebar() {
   const { conversations, setNewChatDialogOpen } = useChatFlow();
@@ -20,6 +25,8 @@ export function ChatListSidebar() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTab, setFilterTab] = useState<"all" | "unread" | "groups">("all");
+  const listRef = React.useRef<HTMLDivElement>(null);
+  const hover = useFluidHover(listRef, { axis: "y" });
 
   const filteredConversations = conversations.filter((c) => {
     const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -74,23 +81,38 @@ export function ChatListSidebar() {
           />
         </div>
 
-        <Tabs
-          value={filterTab}
-          onValueChange={(v) => setFilterTab(v as any)}
-          className="w-full"
+        <div
+          role="tablist"
+          aria-label="Filter conversations"
+          className="relative grid w-full grid-cols-3 h-9 p-0.5 rounded-lg bg-muted/60 text-muted-foreground select-none"
         >
-          <TabsList className="grid w-full grid-cols-3 h-8">
-            <TabsTrigger value="all" className="text-xs">
-              All
-            </TabsTrigger>
-            <TabsTrigger value="unread" className="text-xs">
-              Unread
-            </TabsTrigger>
-            <TabsTrigger value="groups" className="text-xs">
-              Groups
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+          {(["all", "unread", "groups"] as const).map((tabKey) => {
+            const isTabActive = filterTab === tabKey;
+            const label = tabKey === "all" ? "All" : tabKey === "unread" ? "Unread" : "Groups";
+            return (
+              <button
+                key={tabKey}
+                role="tab"
+                aria-selected={isTabActive}
+                onClick={() => setFilterTab(tabKey)}
+                className="relative z-10 flex items-center justify-center text-xs transition-colors py-1 px-2 rounded-md focus-visible:outline-none"
+              >
+                {isTabActive && (
+                  <motion.div
+                    layoutId="chatlist-active-tab"
+                    className="absolute inset-0 rounded-md bg-background shadow-xs"
+                    transition={spring.fast}
+                  />
+                )}
+                <span className="relative z-10">
+                  <GhostSpan active={isTabActive} activeWeight="semibold" restingWeight="medium">
+                    {label}
+                  </GhostSpan>
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <ScrollArea className="flex-1 p-2">
@@ -99,17 +121,19 @@ export function ChatListSidebar() {
             No conversations found.
           </div>
         ) : (
-          <div className="space-y-1">
-            {filteredConversations.map((conv) => {
+          <div ref={listRef} {...hover.handlers} className="relative space-y-1">
+            <FluidHoverHighlight hover={hover} className="rounded-lg bg-accent/40 dark:bg-accent/30" />
+            {filteredConversations.map((conv, index) => {
               const isActive = activeId === conv.id;
               return (
                 <Link
                   key={conv.id}
+                  ref={(el) => hover.registerItem(index, el)}
                   href={`/chat/${conv.id}`}
-                  className={`flex items-start gap-3 p-3 rounded-lg transition-colors text-left ${
+                  className={`relative z-10 flex items-start gap-3 p-3 rounded-lg transition-colors text-left ${
                     isActive
-                      ? "bg-accent text-accent-foreground font-medium shadow-xs"
-                      : "hover:bg-muted/60 text-foreground"
+                      ? "bg-accent/80 text-accent-foreground font-medium shadow-xs"
+                      : "text-foreground"
                   }`}
                 >
                   {/* Avatar & Status dot */}
@@ -134,9 +158,14 @@ export function ChatListSidebar() {
                   {/* Info */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-1 mb-1">
-                      <span className="text-sm font-semibold truncate">
+                      <GhostSpan
+                        active={isActive}
+                        activeWeight="semibold"
+                        restingWeight="medium"
+                        className="text-sm truncate"
+                      >
                         {conv.name}
-                      </span>
+                      </GhostSpan>
                       <span className="text-[11px] text-muted-foreground shrink-0 font-normal">
                         {conv.lastMessageTime}
                       </span>

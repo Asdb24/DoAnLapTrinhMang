@@ -48,6 +48,9 @@ import {
   AlertOctagon,
 } from "lucide-react";
 import { UserStatusIndicator } from "@/components/common/UserStatusIndicator";
+import { useFluidHover } from "@/hooks/use-fluid-hover";
+import { FluidHoverHighlight } from "@/components/fluid-hover-highlight";
+import { GhostSpan } from "@/lib/font-weight";
 
 type SettingsTab = "profile" | "customization" | "notifications" | "blocked" | "danger";
 
@@ -64,6 +67,8 @@ export function SettingsView() {
   } = useChatFlow();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
+  const navRef = React.useRef<HTMLElement>(null);
+  const navHover = useFluidHover(navRef, { axis: "y" });
 
   // Profile Form state
   const [displayName, setDisplayName] = useState(settings.displayName);
@@ -114,7 +119,8 @@ export function SettingsView() {
   return (
     <div className="flex-1 flex flex-col md:flex-row h-full bg-background overflow-hidden">
       {/* Left Vertical Settings Navigation */}
-      <nav className="w-full md:w-64 border-b md:border-b-0 md:border-r bg-card/40 p-4 shrink-0 flex md:flex-col gap-1 overflow-x-auto select-none">
+      <nav ref={navRef} {...navHover.handlers} className="relative w-full md:w-64 border-b md:border-b-0 md:border-r bg-card/40 p-4 shrink-0 flex md:flex-col gap-1 overflow-x-auto select-none">
+        <FluidHoverHighlight hover={navHover} className="rounded-lg bg-accent/40 dark:bg-accent/30" />
         <div className="hidden md:block mb-3 px-2">
           <SidebarTrigger className="-ml-2 mb-2 inline-flex" />
           <h2 className="text-lg font-bold tracking-tight">Settings</h2>
@@ -122,52 +128,67 @@ export function SettingsView() {
         </div>
 
         <Button
+          ref={(el) => navHover.registerItem(0, el)}
           variant={activeTab === "profile" ? "secondary" : "ghost"}
-          className="justify-start gap-2.5 text-xs font-medium h-9"
+          className="relative z-10 justify-start gap-2.5 text-xs font-medium h-9"
           onClick={() => setActiveTab("profile")}
         >
           <User className="h-4 w-4 text-primary" />
-          <span>Profile</span>
+          <GhostSpan active={activeTab === "profile"} activeWeight="semibold" restingWeight="medium">
+            Profile
+          </GhostSpan>
         </Button>
 
         <Button
+          ref={(el) => navHover.registerItem(1, el)}
           variant={activeTab === "customization" ? "secondary" : "ghost"}
-          className="justify-start gap-2.5 text-xs font-medium h-9"
+          className="relative z-10 justify-start gap-2.5 text-xs font-medium h-9"
           onClick={() => setActiveTab("customization")}
         >
           <Sliders className="h-4 w-4 text-primary" />
-          <span>Chat Customization</span>
+          <GhostSpan active={activeTab === "customization"} activeWeight="semibold" restingWeight="medium">
+            Chat Customization
+          </GhostSpan>
         </Button>
 
         <Button
+          ref={(el) => navHover.registerItem(2, el)}
           variant={activeTab === "notifications" ? "secondary" : "ghost"}
-          className="justify-start gap-2.5 text-xs font-medium h-9"
+          className="relative z-10 justify-start gap-2.5 text-xs font-medium h-9"
           onClick={() => setActiveTab("notifications")}
         >
           <Bell className="h-4 w-4 text-primary" />
-          <span>Notifications</span>
+          <GhostSpan active={activeTab === "notifications"} activeWeight="semibold" restingWeight="medium">
+            Notifications
+          </GhostSpan>
         </Button>
 
         <Button
+          ref={(el) => navHover.registerItem(3, el)}
           variant={activeTab === "blocked" ? "secondary" : "ghost"}
-          className="justify-start gap-2.5 text-xs font-medium h-9"
+          className="relative z-10 justify-start gap-2.5 text-xs font-medium h-9"
           onClick={() => setActiveTab("blocked")}
         >
           <ShieldAlert className="h-4 w-4 text-primary" />
-          <span>Blocked Users</span>
+          <GhostSpan active={activeTab === "blocked"} activeWeight="semibold" restingWeight="medium">
+            Blocked Users
+          </GhostSpan>
         </Button>
 
         <div className="hidden md:block my-2 border-t border-border" />
 
         <Button
+          ref={(el) => navHover.registerItem(4, el)}
           variant={activeTab === "danger" ? "destructive" : "ghost"}
-          className={`justify-start gap-2.5 text-xs font-medium h-9 ${
+          className={`relative z-10 justify-start gap-2.5 text-xs font-medium h-9 ${
             activeTab === "danger" ? "" : "text-destructive hover:bg-destructive/10"
           }`}
           onClick={() => setActiveTab("danger")}
         >
           <AlertTriangle className="h-4 w-4" />
-          <span>Danger Zone</span>
+          <GhostSpan active={activeTab === "danger"} activeWeight="semibold" restingWeight="medium">
+            Danger Zone
+          </GhostSpan>
         </Button>
       </nav>
 
@@ -176,7 +197,7 @@ export function SettingsView() {
         <div className="p-6 sm:p-10">
         {/* 1. PROFILE SECTION */}
         {activeTab === "profile" && (
-          <div className="space-y-6 animate-in fade-in-50 duration-200">
+          <div className="space-y-6 animate-in fade-in-50 duration-80">
             <div>
               <h3 className="text-xl font-bold tracking-tight">Public Profile</h3>
               <p className="text-xs text-muted-foreground mt-1">

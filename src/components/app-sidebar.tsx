@@ -26,6 +26,9 @@ import {
 import { useChatFlow } from "@/context/ChatFlowContext"
 import { CreateChannelDialog } from "@/components/channels/CreateChannelDialog"
 import { cn } from "@/lib/utils"
+import { useFluidHover } from "@/hooks/use-fluid-hover"
+import { FluidHoverHighlight } from "@/components/fluid-hover-highlight"
+import { GhostSpan } from "@/lib/font-weight"
 
 type NavSection = "Chats" | "Channels" | "Contacts" | "Settings"
 type MessageFilter = "all" | "unread" | "direct" | "group"
@@ -55,6 +58,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [searchQuery, setSearchQuery] = React.useState("")
   const [messageFilter, setMessageFilter] = React.useState<MessageFilter>("all")
   const [createChannelOpen, setCreateChannelOpen] = React.useState(false)
+
+  const iconRailRef = React.useRef<HTMLDivElement>(null)
+  const iconHover = useFluidHover(iconRailRef, { axis: "y" })
+
+  const convListRef = React.useRef<HTMLDivElement>(null)
+  const convHover = useFluidHover(convListRef, { axis: "y" })
+
+  const channelListRef = React.useRef<HTMLDivElement>(null)
+  const channelHover = useFluidHover(channelListRef, { axis: "y" })
 
   React.useEffect(() => {
     setActiveSection(getRouteSection())
@@ -139,30 +151,36 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarContent className="pt-3">
             <SidebarGroup>
               <SidebarGroupContent className="px-1.5 md:px-0">
-                <SidebarMenu>
-                  {navMain.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton
-                        tooltip={{
-                          children: item.title,
-                          hidden: false,
-                        }}
-                        aria-label={item.title}
-                        onClick={() => handleNavClick(item.title, item.url)}
-                        isActive={activeSection === item.title}
-                        className={cn(
-                          "h-9 w-9 p-0 justify-center rounded-lg mx-auto transition-colors",
-                          activeSection === item.title
-                            ? "bg-primary/10 text-primary hover:bg-primary/15 font-semibold"
-                            : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-                        )}
+                <div ref={iconRailRef} {...iconHover.handlers} className="relative">
+                  <FluidHoverHighlight hover={iconHover} className="rounded-lg bg-sidebar-accent/60" />
+                  <SidebarMenu className="relative z-10">
+                    {navMain.map((item, index) => (
+                      <SidebarMenuItem
+                        key={item.title}
+                        ref={(el) => iconHover.registerItem(index, el)}
                       >
-                        <item.icon className="h-4 w-4" />
-                        <span className="md:hidden">{item.title}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
+                        <SidebarMenuButton
+                          tooltip={{
+                            children: item.title,
+                            hidden: false,
+                          }}
+                          aria-label={item.title}
+                          onClick={() => handleNavClick(item.title, item.url)}
+                          isActive={activeSection === item.title}
+                          className={cn(
+                            "h-9 w-9 p-0 justify-center rounded-lg mx-auto transition-colors",
+                            activeSection === item.title
+                              ? "bg-primary/10 text-primary font-semibold"
+                              : "text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          <item.icon className="h-4 w-4" />
+                          <span className="md:hidden">{item.title}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </div>
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>
@@ -174,7 +192,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
         <Sidebar
           collapsible="none"
-          className="hidden md:flex shrink-0 w-[calc(var(--sidebar-width)_-_var(--sidebar-width-icon)_-_1px)] overflow-hidden transition-opacity duration-150 group-data-[collapsible=icon]:opacity-0"
+          className="hidden md:flex shrink-0 w-[calc(var(--sidebar-width)_-_var(--sidebar-width-icon)_-_1px)] overflow-hidden transition-opacity duration-80 ease-out group-data-[collapsible=icon]:opacity-0"
           style={{ width: "calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px)" }}
         >
           <SidebarHeader className="gap-3 border-b p-3.5">
@@ -286,40 +304,46 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         : "No conversations yet."}
                     </div>
                   ) : (
-                    filteredConversations.map((conv) => {
-                      const isActive = activeConversationId === conv.id
-                      return (
-                        <Link
-                          href={`/chat/${conv.id}`}
-                          key={conv.id}
-                          onClick={() => {
-                            if (isMobile) setOpenMobile(false)
-                          }}
-                          className={cn(
-                            "flex flex-col items-start gap-2 border-b p-4 text-sm leading-tight whitespace-nowrap last:border-b-0 transition-all",
-                            isActive
-                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                              : "hover:bg-sidebar-accent/50 text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          <div className="flex w-full items-center gap-2">
-                            <span className={cn(isActive ? "font-semibold text-foreground" : "font-medium text-foreground")}>{conv.name}</span>
-                            {conv.unreadCount > 0 && (
-                              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
-                                {conv.unreadCount}
-                              </span>
+                    <div ref={convListRef} {...convHover.handlers} className="relative">
+                      <FluidHoverHighlight hover={convHover} className="rounded-none bg-sidebar-accent/35" />
+                      {filteredConversations.map((conv, index) => {
+                        const isActive = activeConversationId === conv.id
+                        return (
+                          <Link
+                            href={`/chat/${conv.id}`}
+                            key={conv.id}
+                            ref={(el) => convHover.registerItem(index, el)}
+                            onClick={() => {
+                              if (isMobile) setOpenMobile(false)
+                            }}
+                            className={cn(
+                              "relative z-10 flex flex-col items-start gap-2 border-b p-4 text-sm leading-tight whitespace-nowrap last:border-b-0 transition-colors",
+                              isActive
+                                ? "bg-sidebar-accent/80 text-sidebar-accent-foreground font-medium"
+                                : "text-muted-foreground hover:text-foreground"
                             )}
-                            <span className="ml-auto text-xs text-muted-foreground">{conv.lastMessageTime}</span>
-                          </div>
-                          <span className="font-medium text-xs">
-                            {conv.type === "group" ? `# ${conv.name}` : `@${conv.name.toLowerCase().replace(/\s+/g, "")}`}
-                          </span>
-                          <span className="line-clamp-2 w-[260px] text-xs whitespace-break-spaces text-muted-foreground">
-                            {conv.lastMessage || "No messages yet"}
-                          </span>
-                        </Link>
-                      )
-                    })
+                          >
+                            <div className="flex w-full items-center gap-2">
+                              <GhostSpan active={isActive} activeWeight="semibold" restingWeight="medium" className="text-foreground">
+                                {conv.name}
+                              </GhostSpan>
+                              {conv.unreadCount > 0 && (
+                                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                                  {conv.unreadCount}
+                                </span>
+                              )}
+                              <span className="ml-auto text-xs text-muted-foreground">{conv.lastMessageTime}</span>
+                            </div>
+                            <span className="font-medium text-xs">
+                              {conv.type === "group" ? `# ${conv.name}` : `@${conv.name.toLowerCase().replace(/\s+/g, "")}`}
+                            </span>
+                            <span className="line-clamp-2 w-[260px] text-xs whitespace-break-spaces text-muted-foreground">
+                              {conv.lastMessage || "No messages yet"}
+                            </span>
+                          </Link>
+                        )
+                      })}
+                    </div>
                   )}
                 </SidebarGroupContent>
               </SidebarGroup>
@@ -333,31 +357,37 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       No channels match your search.
                     </div>
                   ) : (
-                    filteredChannels.map((channel) => {
-                      const isActive = activeConversationId === channel.id
-                      return (
-                        <button
-                          key={channel.id}
-                          onClick={() => handleSelectChannel(channel.id)}
-                          className={cn(
-                            "flex flex-col items-start gap-2 border-b p-4 text-sm leading-tight whitespace-nowrap last:border-b-0 w-full text-left transition-all",
-                            isActive
-                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                              : "hover:bg-sidebar-accent/50 text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          <div className="flex w-full items-center gap-2">
-                            <span className="font-medium">#{channel.name}</span>
-                            <span className="ml-auto text-xs">
-                              {channel.subscriberCount || 0} members
+                    <div ref={channelListRef} {...channelHover.handlers} className="relative">
+                      <FluidHoverHighlight hover={channelHover} className="rounded-none bg-sidebar-accent/35" />
+                      {filteredChannels.map((channel, index) => {
+                        const isActive = activeConversationId === channel.id
+                        return (
+                          <button
+                            key={channel.id}
+                            ref={(el) => channelHover.registerItem(index, el)}
+                            onClick={() => handleSelectChannel(channel.id)}
+                            className={cn(
+                              "relative z-10 flex flex-col items-start gap-2 border-b p-4 text-sm leading-tight whitespace-nowrap last:border-b-0 w-full text-left transition-colors",
+                              isActive
+                                ? "bg-sidebar-accent/80 text-sidebar-accent-foreground font-medium"
+                                : "text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            <div className="flex w-full items-center gap-2">
+                              <GhostSpan active={isActive} activeWeight="semibold" restingWeight="medium" className="font-medium text-foreground">
+                                #{channel.name}
+                              </GhostSpan>
+                              <span className="ml-auto text-xs">
+                                {channel.subscriberCount || 0} members
+                              </span>
+                            </div>
+                            <span className="line-clamp-2 w-[260px] text-xs whitespace-break-spaces text-muted-foreground">
+                              {channel.description || "Workspace channel"}
                             </span>
-                          </div>
-                          <span className="line-clamp-2 w-[260px] text-xs whitespace-break-spaces text-muted-foreground">
-                            {channel.description || "Workspace channel"}
-                          </span>
-                        </button>
-                      )
-                    })
+                          </button>
+                        )
+                      })}
+                    </div>
                   )}
                 </SidebarGroupContent>
               </SidebarGroup>

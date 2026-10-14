@@ -49,6 +49,10 @@
     --sidebar-accent-foreground: 221.2 83.2% 53.3%;
     --sidebar-border: 214.3 31.8% 91.4%;
     --sidebar-ring: 221.2 83.2% 53.3%;
+
+    /* Fluid Functionalism interaction tokens */
+    --hover: 214 95% 93%;
+    --active: 217 91% 90%;
   }
 
   .dark {
@@ -95,6 +99,10 @@
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 217.2 32.6% 17.5%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Fluid Functionalism interaction tokens */
+    --hover: 217.2 32.6% 17.5%;
+    --active: 217.2 32.6% 22%;
   }
 }
 
@@ -117,5 +125,15 @@
   .no-scrollbar {
     -ms-overflow-style: none !important;
     scrollbar-width: none !important;
+  }
+
+  .bg-hover {
+    background-color: hsl(var(--hover));
+  }
+  .bg-active {
+    background-color: hsl(var(--active));
+  }
+  .duration-80 {
+    transition-duration: 80ms;
   }
 }
