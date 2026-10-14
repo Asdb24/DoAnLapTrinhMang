@@ -12,7 +12,11 @@
     "package.json",
     "!node_modules/**/*",
     "!.next/cache/**/*",
-    "!.next/dev/**/*"
+    "!.next/dev/**/*",
+    "!**/*.map",
+    "!**/*.ts",
+    "!**/*.d.ts",
+    "!**/*.md"
   ],
   "asar": true,
   "asarUnpack": [

@@ -5,6 +5,8 @@ import { resolveAppOrigin } from './src/lib/public-url.mjs';
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
+  poweredByHeader: false,
+  compress: true,
   turbopack: { root: fileURLToPath(new URL('.', import.meta.url)) },
   outputFileTracingRoot: fileURLToPath(new URL('.', import.meta.url)),
   images: {
