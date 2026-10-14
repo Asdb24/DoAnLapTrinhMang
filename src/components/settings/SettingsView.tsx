@@ -120,7 +120,7 @@ export function SettingsView() {
     <div className="flex-1 flex flex-col md:flex-row h-full bg-background overflow-hidden">
       {/* Left Vertical Settings Navigation */}
       <nav ref={navRef} {...navHover.handlers} className="relative w-full md:w-64 border-b md:border-b-0 md:border-r bg-card/40 p-4 shrink-0 flex md:flex-col gap-1 overflow-x-auto select-none">
-        <FluidHoverHighlight hover={navHover} className="rounded-lg bg-accent/40 dark:bg-accent/30" />
+        <FluidHoverHighlight hover={navHover} className="rounded-lg bg-accent/40 dark:bg-white/[0.06]" />
         <div className="hidden md:block mb-3 px-2">
           <SidebarTrigger className="-ml-2 mb-2 inline-flex" />
           <h2 className="text-lg font-bold tracking-tight">Settings</h2>

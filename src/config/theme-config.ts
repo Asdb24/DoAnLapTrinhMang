@@ -87,36 +87,36 @@ export const themeConfig: ThemeConfig = {
       },
     },
     dark: {
-      background: "hsl(224, 71%, 4%)",          // #020617 - obsidian slate
-      foreground: "hsl(210, 40%, 98%)",        // #f8fafc
-      card: "hsl(222.2, 84%, 4.9%)",           // #0f172a - dark card surface
-      cardForeground: "hsl(210, 40%, 98%)",
-      popover: "hsl(222.2, 84%, 4.9%)",
-      popoverForeground: "hsl(210, 40%, 98%)",
-      primary: "hsl(217.2, 91.2%, 59.8%)",     // #3b82f6 - luminous blue
+      background: "hsl(224, 18%, 7%)",         // #0f1217 - rich charcoal-slate canvas
+      foreground: "hsl(210, 25%, 96%)",        // #f1f5f9 - soft off-white text
+      card: "hsl(224, 16%, 12%)",              // #1a1f29 - distinct elevated surface
+      cardForeground: "hsl(210, 25%, 96%)",
+      popover: "hsl(224, 16%, 14%)",           // #1e2430 - menu/popover surface
+      popoverForeground: "hsl(210, 25%, 96%)",
+      primary: "hsl(224, 76%, 54%)",           // #2d68f8 - royal cobalt primary
       primaryForeground: "hsl(0, 0%, 100%)",
-      secondary: "hsl(217.2, 32.6%, 17.5%)",   // #1e293b
-      secondaryForeground: "hsl(210, 40%, 98%)",
-      muted: "hsl(217.2, 32.6%, 17.5%)",
-      mutedForeground: "hsl(215, 20.2%, 65.1%)", // #94a3b8
-      accent: "hsl(217.2, 32.6%, 17.5%)",
-      accentForeground: "hsl(210, 40%, 98%)",
-      destructive: "hsl(0, 62.8%, 30.6%)",
-      destructiveForeground: "hsl(210, 40%, 98%)",
-      border: "hsl(217.2, 32.6%, 17.5%)",
-      input: "hsl(217.2, 32.6%, 17.5%)",
-      ring: "hsl(224.3, 76.3%, 48%)",
-      hover: "hsl(217.2, 32.6%, 17.5%)",
-      active: "hsl(217.2, 32.6%, 22%)",
+      secondary: "hsl(224, 14%, 15%)",         // #212732
+      secondaryForeground: "hsl(210, 25%, 96%)",
+      muted: "hsl(224, 14%, 15%)",
+      mutedForeground: "hsl(218, 14%, 65%)",   // #99a3b2 - readable slate
+      accent: "hsl(224, 18%, 18%)",
+      accentForeground: "hsl(210, 25%, 96%)",
+      destructive: "hsl(0, 72%, 51%)",
+      destructiveForeground: "hsl(0, 0%, 100%)",
+      border: "hsl(224, 14%, 18%)",            // #282f3c - crisp hairline border
+      input: "hsl(224, 14%, 18%)",
+      ring: "hsl(224, 76%, 54%)",
+      hover: "hsl(224, 18%, 16%)",             // soft luminous hover
+      active: "hsl(224, 18%, 22%)",
       sidebar: {
-        background: "hsl(222.2, 84%, 4.9%)",
-        foreground: "hsl(215, 20.2%, 65.1%)",
-        primary: "hsl(217.2, 91.2%, 59.8%)",
+        background: "hsl(224, 20%, 9%)",       // #13171e - architectural container
+        foreground: "hsl(218, 14%, 65%)",
+        primary: "hsl(224, 76%, 54%)",
         primaryForeground: "hsl(0, 0%, 100%)",
-        accent: "hsl(217.2, 32.6%, 17.5%)",
-        accentForeground: "hsl(210, 40%, 98%)",
-        border: "hsl(217.2, 32.6%, 17.5%)",
-        ring: "hsl(217.2, 91.2%, 59.8%)",
+        accent: "hsl(224, 18%, 15%)",
+        accentForeground: "hsl(210, 25%, 96%)",
+        border: "hsl(224, 14%, 18%)",
+        ring: "hsl(224, 76%, 54%)",
       },
     },
   },

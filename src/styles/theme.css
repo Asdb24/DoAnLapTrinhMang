@@ -56,50 +56,57 @@
   }
 
   .dark {
-    --background: 224 71% 4%;
-    --foreground: 210 40% 98%;
+    /* Base canvas: rich charcoal-slate with architectural depth */
+    --background: 224 18% 7%;
+    --foreground: 210 25% 96%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    /* Elevated surfaces: distinct card layer lifting off canvas */
+    --card: 224 16% 12%;
+    --card-foreground: 210 25% 96%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    /* Popovers, menus, and dialogs */
+    --popover: 224 16% 14%;
+    --popover-foreground: 210 25% 96%;
 
-    /* Luminous Blue primary for dark mode */
-    --primary: 217.2 91.2% 59.8%;
+    /* Refined Royal Cobalt primary */
+    --primary: 224 76% 54%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 224 14% 15%;
+    --secondary-foreground: 210 25% 96%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 224 14% 15%;
+    --muted-foreground: 218 14% 65%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 224 18% 18%;
+    --accent-foreground: 210 25% 96%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    /* Crisp hairline borders with subtle luminosity */
+    --border: 224 14% 18%;
+    --input: 224 14% 18%;
+    --ring: 224 76% 54%;
 
-    --chart-1: 217.2 91.2% 59.8%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
+    --chart-1: 224 76% 54%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 197 37% 35%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
 
-    --sidebar-background: 222.2 84% 4.9%;
-    --sidebar-foreground: 215 20.2% 65.1%;
-    --sidebar-primary: 217.2 91.2% 59.8%;
+    /* Sidebar: dedicated architectural container layer */
+    --sidebar-background: 224 20% 9%;
+    --sidebar-foreground: 218 14% 65%;
+    --sidebar-primary: 224 76% 54%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217.2 32.6% 17.5%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 17.5%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-    --hover: 217.2 32.6% 17.5%;
-    --active: 217.2 32.6% 22%;
+    --sidebar-accent: 224 18% 15%;
+    --sidebar-accent-foreground: 210 25% 96%;
+    --sidebar-border: 224 14% 18%;
+    --sidebar-ring: 224 76% 54%;
+
+    /* Fluid Functionalism interaction tokens */
+    --hover: 224 18% 16%;
+    --active: 224 18% 22%;
   }
 }

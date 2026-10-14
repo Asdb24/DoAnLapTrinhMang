@@ -75,7 +75,6 @@ export function ChannelsView() {
             <div className="flex items-center gap-3">
               <SidebarTrigger className="-ml-2 mr-1 hidden md:inline-flex" />
               <h1 className="text-2xl font-bold tracking-tight">Channels & Groups</h1>
-              <UserStatusBadge status={settings.presence || "online"} />
             </div>
             <p className="text-sm text-muted-foreground mt-1">
               Browse public spaces or collaborate in private channels across your organization.
@@ -172,7 +171,7 @@ export function ChannelsView() {
         ) : viewMode === "grid" ? (
           /* Grid View with 2D Fluid Hover */
           <div ref={gridRef} {...gridHover.handlers} className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <FluidHoverHighlight hover={gridHover} className="rounded-xl bg-accent/40 dark:bg-accent/30" />
+            <FluidHoverHighlight hover={gridHover} className="rounded-xl bg-accent/40 dark:bg-white/[0.06]" />
             {filteredChannels.map((channel, index) => (
               <div
                 key={channel.id}

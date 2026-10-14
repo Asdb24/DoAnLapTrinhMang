@@ -31,7 +31,7 @@ export function FluidHoverHighlight({
     <motion.div
       aria-hidden="true"
       className={cn(
-        "pointer-events-none absolute z-0 rounded-md bg-accent/60 dark:bg-accent/40",
+        "pointer-events-none absolute z-0 rounded-md bg-accent/60 dark:bg-white/[0.06]",
         className
       )}
       initial={false}

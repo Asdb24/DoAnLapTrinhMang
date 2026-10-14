@@ -122,7 +122,7 @@ export function ChatListSidebar() {
           </div>
         ) : (
           <div ref={listRef} {...hover.handlers} className="relative space-y-1">
-            <FluidHoverHighlight hover={hover} className="rounded-lg bg-accent/40 dark:bg-accent/30" />
+            <FluidHoverHighlight hover={hover} className="rounded-lg bg-accent/40 dark:bg-white/[0.06]" />
             {filteredConversations.map((conv, index) => {
               const isActive = activeId === conv.id;
               return (
@@ -132,7 +132,7 @@ export function ChatListSidebar() {
                   href={`/chat/${conv.id}`}
                   className={`relative z-10 flex items-start gap-3 p-3 rounded-lg transition-colors text-left ${
                     isActive
-                      ? "bg-accent/80 text-accent-foreground font-medium shadow-xs"
+                      ? "bg-accent/80 text-accent-foreground dark:bg-white/[0.08] dark:text-foreground font-medium shadow-xs"
                       : "text-foreground"
                   }`}
                 >

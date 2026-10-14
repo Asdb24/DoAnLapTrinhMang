@@ -21,7 +21,7 @@ const bubbleVariants = cva(
         default:
           "[&>[data-slot=bubble-content]]:bg-primary [&>[data-slot=bubble-content]]:text-primary-foreground [&>[data-slot=bubble-content]]:shadow-xs",
         secondary:
-          "[&>[data-slot=bubble-content]]:bg-card [&>[data-slot=bubble-content]]:text-card-foreground [&>[data-slot=bubble-content]]:border-border/80 [&>[data-slot=bubble-content]]:shadow-2xs dark:[&>[data-slot=bubble-content]]:bg-secondary dark:[&>[data-slot=bubble-content]]:text-secondary-foreground dark:[&>[data-slot=bubble-content]]:border-border/30",
+          "[&>[data-slot=bubble-content]]:bg-card [&>[data-slot=bubble-content]]:text-card-foreground [&>[data-slot=bubble-content]]:border [&>[data-slot=bubble-content]]:border-border/80 [&>[data-slot=bubble-content]]:shadow-2xs dark:[&>[data-slot=bubble-content]]:bg-card dark:[&>[data-slot=bubble-content]]:text-card-foreground dark:[&>[data-slot=bubble-content]]:border-border/60 dark:[&>[data-slot=bubble-content]]:shadow-none",
         muted:
           "[&>[data-slot=bubble-content]]:bg-muted [&>[data-slot=bubble-content]]:text-muted-foreground",
         outline:

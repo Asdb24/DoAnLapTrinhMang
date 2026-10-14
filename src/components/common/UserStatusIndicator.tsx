@@ -43,7 +43,10 @@ export function UserStatusIndicator({
 export function UserStatusBadge({ status = "offline" }: { status?: PresenceStatus }) {
   if (status === "online") {
     return (
-      <Badge variant="default" className="text-xs font-normal capitalize">
+      <Badge
+        variant="outline"
+        className="text-xs font-normal capitalize bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+      >
         <UserStatusIndicator status="online" size="sm" className="mr-1.5" />
         Online
       </Badge>
@@ -51,14 +54,20 @@ export function UserStatusBadge({ status = "offline" }: { status?: PresenceStatu
   }
   if (status === "away") {
     return (
-      <Badge variant="secondary" className="text-xs font-normal capitalize">
+      <Badge
+        variant="outline"
+        className="text-xs font-normal capitalize bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+      >
         <UserStatusIndicator status="away" size="sm" className="mr-1.5" />
         Away
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="text-xs font-normal capitalize text-muted-foreground">
+    <Badge
+      variant="outline"
+      className="text-xs font-normal capitalize text-muted-foreground bg-muted/40 border-border/60"
+    >
       <UserStatusIndicator status="offline" size="sm" className="mr-1.5" />
       Offline
     </Badge>
