@@ -47,6 +47,8 @@ interface ChatFlowContextType extends ApiState {
   realtimeStatus:string;
   newChatDialogOpen:boolean;
   setNewChatDialogOpen:(open:boolean)=>void;
+  settingsDialogOpen:boolean;
+  setSettingsDialogOpen:(open:boolean)=>void;
   startDirectChat:(id:string)=>Promise<string|null>;
   pending:boolean;
   error:string|null;
@@ -67,6 +69,7 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
   const [pendingCount,setPendingCount]=useState(0);
   const [activeConversationId,setActiveConversationId]=useState<string|null>(null);
   const [newChatDialogOpen,setNewChatDialogOpen]=useState(false);
+  const [settingsDialogOpen,setSettingsDialogOpen]=useState(false);
   const [hasOlder,setHasOlder]=useState(false);
   const [loadingMessages,setLoadingMessages]=useState(false);
   const [realtimeStatus,setRealtimeStatus]=useState('CONNECTING');
@@ -303,7 +306,7 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
   if(!configured)return <main className="min-h-screen flex flex-col items-center justify-center gap-4 p-8 text-center"><h1 className="text-xl font-semibold">Connect your ChatFlow workspace</h1><p>Supabase configuration is required. Set the project URL and publishable key on the server, then restart the app.</p></main>;
   if(status==='loading'||status==='error')return <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background p-8 text-center">{status==='loading'?<p role="status">Connecting to your workspace…</p>:<><p role="alert">{error||'Unable to load your workspace.'}</p><Button disabled={pendingCount>0} onClick={()=>userRef.current?refresh():window.location.reload()}>Retry connection</Button></>}</div>;
   if(!state)return <AuthScreen authenticate={authenticate} pending={pendingCount>0} error={error} notice={notice} dismissError={dismissError} resetPassword={async email=>(await run(async()=>{setError(null);check(await getSupabase().auth.resetPasswordForEmail(email,{redirectTo:`${appOrigin(window.location.origin)}/auth/callback?type=recovery`}));setNotice('If an account exists for this email, a password reset link will arrive shortly.');return true;}))??false}/>;
-  return <ChatFlowContext.Provider value={{...state,activeConversationId,setActiveConversationId,newChatDialogOpen,setNewChatDialogOpen,pending:pendingCount>0,error,dismissError,refresh,hasOlder,loadingMessages,realtimeStatus,loadOlder,markConversationAsRead,
+  return <ChatFlowContext.Provider value={{...state,activeConversationId,setActiveConversationId,newChatDialogOpen,setNewChatDialogOpen,settingsDialogOpen,setSettingsDialogOpen,pending:pendingCount>0,error,dismissError,refresh,hasOlder,loadingMessages,realtimeStatus,loadOlder,markConversationAsRead,
     sendMessage:async(id,content,attachments=[],clientId=crypto.randomUUID(),media)=>(await run(async()=>{
       const current=userRef.current;if(!current)return false;
       if(attachments.some(a=>!a.id))throw new Error('Attachment upload is incomplete. Please retry.');

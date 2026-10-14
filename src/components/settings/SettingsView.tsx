@@ -51,10 +51,16 @@ import { UserStatusIndicator } from "@/components/common/UserStatusIndicator";
 import { useFluidHover } from "@/hooks/use-fluid-hover";
 import { FluidHoverHighlight } from "@/components/fluid-hover-highlight";
 import { GhostSpan } from "@/lib/font-weight";
+import { cn } from "@/lib/utils";
 
 type SettingsTab = "profile" | "customization" | "notifications" | "blocked" | "danger";
 
-export function SettingsView() {
+export interface SettingsViewProps {
+  isModal?: boolean;
+  onClose?: () => void;
+}
+
+export function SettingsView({ isModal = false, onClose }: SettingsViewProps = {}) {
   const {
     settings,
     updateSettings,
@@ -119,13 +125,22 @@ export function SettingsView() {
   return (
     <div className="flex-1 flex flex-col md:flex-row h-full bg-background overflow-hidden">
       {/* Left Vertical Settings Navigation */}
-      <nav ref={navRef} {...navHover.handlers} className="relative w-full md:w-64 border-b md:border-b-0 md:border-r bg-card/40 p-4 shrink-0 flex md:flex-col gap-1 overflow-x-auto select-none">
+      <nav
+        ref={navRef}
+        {...navHover.handlers}
+        className={cn(
+          "relative border-b md:border-b-0 md:border-r bg-card/40 shrink-0 flex md:flex-col gap-1 overflow-x-auto select-none",
+          isModal ? "w-full md:w-56 p-3" : "w-full md:w-64 p-4"
+        )}
+      >
         <FluidHoverHighlight hover={navHover} className="rounded-lg bg-accent/40 dark:bg-white/[0.06]" />
-        <div className="hidden md:block mb-3 px-2">
-          <SidebarTrigger className="-ml-2 mb-2 inline-flex" />
-          <h2 className="text-lg font-bold tracking-tight">Settings</h2>
-          <p className="text-xs text-muted-foreground">Manage your account & app preferences</p>
-        </div>
+        {!isModal && (
+          <div className="hidden md:block mb-3 px-2">
+            <SidebarTrigger className="-ml-2 mb-2 inline-flex" />
+            <h2 className="text-lg font-bold tracking-tight">Settings</h2>
+            <p className="text-xs text-muted-foreground">Manage your account & app preferences</p>
+          </div>
+        )}
 
         <Button
           ref={(el) => navHover.registerItem(0, el)}
@@ -133,7 +148,7 @@ export function SettingsView() {
           className="relative z-10 justify-start gap-2.5 text-xs font-medium h-9"
           onClick={() => setActiveTab("profile")}
         >
-          <User className="h-4 w-4 text-primary" />
+          <User className={cn("h-4 w-4 transition-colors", activeTab === "profile" ? "text-primary" : "text-muted-foreground")} />
           <GhostSpan active={activeTab === "profile"} activeWeight="semibold" restingWeight="medium">
             Profile
           </GhostSpan>
@@ -145,7 +160,7 @@ export function SettingsView() {
           className="relative z-10 justify-start gap-2.5 text-xs font-medium h-9"
           onClick={() => setActiveTab("customization")}
         >
-          <Sliders className="h-4 w-4 text-primary" />
+          <Sliders className={cn("h-4 w-4 transition-colors", activeTab === "customization" ? "text-primary" : "text-muted-foreground")} />
           <GhostSpan active={activeTab === "customization"} activeWeight="semibold" restingWeight="medium">
             Chat Customization
           </GhostSpan>
@@ -157,7 +172,7 @@ export function SettingsView() {
           className="relative z-10 justify-start gap-2.5 text-xs font-medium h-9"
           onClick={() => setActiveTab("notifications")}
         >
-          <Bell className="h-4 w-4 text-primary" />
+          <Bell className={cn("h-4 w-4 transition-colors", activeTab === "notifications" ? "text-primary" : "text-muted-foreground")} />
           <GhostSpan active={activeTab === "notifications"} activeWeight="semibold" restingWeight="medium">
             Notifications
           </GhostSpan>
@@ -169,7 +184,7 @@ export function SettingsView() {
           className="relative z-10 justify-start gap-2.5 text-xs font-medium h-9"
           onClick={() => setActiveTab("blocked")}
         >
-          <ShieldAlert className="h-4 w-4 text-primary" />
+          <ShieldAlert className={cn("h-4 w-4 transition-colors", activeTab === "blocked" ? "text-primary" : "text-muted-foreground")} />
           <GhostSpan active={activeTab === "blocked"} activeWeight="semibold" restingWeight="medium">
             Blocked Users
           </GhostSpan>
@@ -193,8 +208,8 @@ export function SettingsView() {
       </nav>
 
       {/* Main Settings Panel */}
-      <ScrollArea className="flex-1 h-full max-w-4xl">
-        <div className="p-6 sm:p-10">
+      <ScrollArea className="flex-1 h-full">
+        <div className={cn(isModal ? "p-6 max-w-3xl" : "p-6 sm:p-10 max-w-4xl")}>
         {/* 1. PROFILE SECTION */}
         {activeTab === "profile" && (
           <div className="space-y-6 animate-in fade-in-50 duration-80">

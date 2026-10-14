@@ -97,7 +97,7 @@ export function ContactsView() {
               onClick={() => setStatusFilter("online")}
               className="text-xs gap-1.5"
             >
-              <span className="h-2 w-2 rounded-full bg-primary" />
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
               Online ({contacts.filter((c) => c.presence === "online").length})
             </Button>
           </div>
@@ -157,7 +157,7 @@ export function ContactsView() {
                     </CardDescription>
 
                     {contact.customStatus && (
-                      <div className="mt-2 text-[11px] text-muted-foreground italic bg-muted/40 px-2 py-1 rounded">
+                      <div className="mt-2 text-xs text-muted-foreground italic bg-muted/40 px-2.5 py-1 rounded-md">
                         "{contact.customStatus}"
                       </div>
                     )}
@@ -167,7 +167,7 @@ export function ContactsView() {
                     <Button
                       variant="default"
                       size="sm"
-                      className="flex-1 gap-2 text-xs h-7 rounded-md"
+                      className="flex-1 gap-2 text-xs font-medium h-8 rounded-lg shadow-2xs"
                       disabled={pending}
                       onClick={() => handleStartChat(contact.id)}
                     >
@@ -177,7 +177,7 @@ export function ContactsView() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className={`text-xs px-2.5 h-7 rounded-md ${blockedUsers.some(b => b.id === contact.id) ? "text-primary border-primary/40" : "text-destructive border-destructive/30 hover:bg-destructive/10"}`}
+                      className={`text-xs px-2.5 h-8 rounded-lg ${blockedUsers.some(b => b.id === contact.id) ? "text-primary border-primary/40" : "text-destructive border-destructive/30 hover:bg-destructive/10"}`}
                       disabled={pending}
                       title={blockedUsers.some(b => b.id === contact.id) ? "Unblock contact" : "Block contact"}
                       onClick={async () => {
@@ -189,9 +189,9 @@ export function ContactsView() {
                       }}
                     >
                       {blockedUsers.some(b => b.id === contact.id) ? (
-                        <ShieldCheck className="h-3.5 w-3.5 text-green-500" />
+                        <ShieldCheck className="h-4 w-4 text-emerald-500" />
                       ) : (
-                        <ShieldAlert className="h-3.5 w-3.5" />
+                        <ShieldAlert className="h-4 w-4" />
                       )}
                     </Button>
                   </CardFooter>

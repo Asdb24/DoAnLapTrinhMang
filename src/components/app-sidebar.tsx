@@ -7,6 +7,7 @@ import {
   Hash,
   Inbox,
   Users,
+  Settings,
 } from "lucide-react"
 
 import { NavUser } from "@/components/nav-user"
@@ -30,7 +31,7 @@ import { useFluidHover } from "@/hooks/use-fluid-hover"
 import { FluidHoverHighlight } from "@/components/fluid-hover-highlight"
 import { GhostSpan } from "@/lib/font-weight"
 
-type NavSection = "Chats" | "Channels" | "Contacts" | "Settings"
+type NavSection = "Chats" | "Channels" | "Contacts"
 type MessageFilter = "all" | "unread" | "direct" | "group"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -43,6 +44,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     activeConversationId,
     openChannelChat,
     startDirectChat,
+    setSettingsDialogOpen,
   } = useChatFlow()
 
   const { setOpen, setOpenMobile, isMobile } = useSidebar()
@@ -50,7 +52,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const getRouteSection = (): NavSection => {
     if (pathname.startsWith("/channels")) return "Channels"
     if (pathname.startsWith("/contacts")) return "Contacts"
-    if (pathname.startsWith("/settings")) return "Settings"
     return "Chats"
   }
 
@@ -185,7 +186,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarGroup>
           </SidebarContent>
 
-          <SidebarFooter className="p-2 pb-3">
+          <SidebarFooter className="p-2 pb-3 flex flex-col gap-1 items-center">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip={{
+                    children: "Settings",
+                    hidden: false,
+                  }}
+                  aria-label="Settings"
+                  onClick={() => setSettingsDialogOpen(true)}
+                  className="h-9 w-9 p-0 justify-center rounded-lg mx-auto text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+                >
+                  <Settings className="h-4 w-4" />
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
             <NavUser />
           </SidebarFooter>
         </Sidebar>
@@ -212,7 +228,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             {activeSection === "Chats" && (
               <div
                 role="tablist"
-                aria-label="Lọc cuộc trò chuyện"
+                aria-label="Filter conversations"
                 className="flex items-center gap-1 pt-0.5 overflow-x-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
               >
                 <button
@@ -221,13 +237,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   aria-selected={messageFilter === "all"}
                   onClick={() => setMessageFilter("all")}
                   className={cn(
-                    "px-2 py-0.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
+                    "px-2.5 py-0.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     messageFilter === "all"
                       ? "bg-primary text-primary-foreground shadow-xs"
                       : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
-                  Tất cả
+                  All
                 </button>
                 <button
                   type="button"
@@ -235,13 +251,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   aria-selected={messageFilter === "unread"}
                   onClick={() => setMessageFilter("unread")}
                   className={cn(
-                    "inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
+                    "inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     messageFilter === "unread"
                       ? "bg-primary text-primary-foreground shadow-xs"
                       : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
-                  <span>Chưa đọc</span>
+                  <span>Unread</span>
                   {totalUnreadCount > 0 && (
                     <span
                       className={cn(
@@ -261,13 +277,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   aria-selected={messageFilter === "direct"}
                   onClick={() => setMessageFilter("direct")}
                   className={cn(
-                    "px-2 py-0.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
+                    "px-2.5 py-0.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     messageFilter === "direct"
                       ? "bg-primary text-primary-foreground shadow-xs"
                       : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
-                  Cá nhân
+                  Direct
                 </button>
                 <button
                   type="button"
@@ -275,13 +291,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   aria-selected={messageFilter === "group"}
                   onClick={() => setMessageFilter("group")}
                   className={cn(
-                    "px-2 py-0.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap",
+                    "px-2.5 py-0.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     messageFilter === "group"
                       ? "bg-primary text-primary-foreground shadow-xs"
                       : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
-                  Nhóm
+                  Groups
                 </button>
               </div>
             )}
@@ -419,22 +435,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       </button>
                     ))
                   )}
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )}
-
-            {activeSection === "Settings" && (
-              <SidebarGroup className="px-0">
-                <SidebarGroupContent>
-                  <Link
-                    href="/settings"
-                    className="flex flex-col items-start gap-2 border-b p-4 text-sm leading-tight whitespace-nowrap hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  >
-                    <span className="font-medium">All Preferences</span>
-                    <span className="text-xs text-muted-foreground">
-                      Manage account, notifications and workspace options
-                    </span>
-                  </Link>
                 </SidebarGroupContent>
               </SidebarGroup>
             )}

@@ -197,14 +197,14 @@ export function ChannelsView() {
                               {channel.name}
                             </GhostSpan>
                           </CardTitle>
-                          <span className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                             <Users className="h-3 w-3" />
                             {channel.subscriberCount} members
                           </span>
                         </div>
                       </div>
 
-                      <Badge variant="secondary" className="text-[10px] font-normal shrink-0">
+                      <Badge variant="secondary" className="text-xs font-normal py-0 h-5 shrink-0">
                         {channel.category}
                       </Badge>
                     </div>
@@ -230,19 +230,19 @@ export function ChannelsView() {
                           size="sm"
                           disabled={pending}
                           onClick={() => handleOpenChannel(channel.id)}
-                          className="h-7 px-3 text-xs gap-1 rounded-md"
+                          className="h-8 px-3 text-xs font-medium gap-1.5 rounded-lg"
                         >
-                          <MessageSquare className="h-3 w-3" />
+                          <MessageSquare className="h-3.5 w-3.5" />
                           Chat
                         </Button>
-                        {channel.isOwner && <Button size="sm" variant="outline" className="h-7 px-3 text-xs rounded-md" onClick={() => setInviteChannel(channel)}>Invite</Button>}
+                        {channel.isOwner && <Button size="sm" variant="outline" className="h-8 px-3 text-xs font-medium rounded-lg" onClick={() => setInviteChannel(channel)}>Invite</Button>}
                         <Button
                           variant="destructive"
                           size="sm"
                           title={channel.isOwner ? "Channel owners cannot leave their channel" : undefined}
                           disabled={pending || channel.isOwner}
                           onClick={async () => { await toggleJoinChannel(channel.id); }}
-                          className="h-7 px-3 text-xs rounded-md"
+                          className="h-8 px-3 text-xs font-medium rounded-lg"
                         >
                           Leave
                         </Button>
@@ -253,7 +253,7 @@ export function ChannelsView() {
                         size="sm"
                         disabled={pending}
                         onClick={async () => { await toggleJoinChannel(channel.id); }}
-                        className="h-7 px-3 text-xs rounded-md"
+                        className="h-8 px-4 text-xs font-semibold rounded-lg shadow-2xs"
                       >
                         Join
                       </Button>
@@ -282,11 +282,11 @@ export function ChannelsView() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <h4 className="text-sm font-bold truncate">#{channel.name}</h4>
-                      <Badge variant="secondary" className="text-[10px] font-normal">
+                      <Badge variant="secondary" className="text-xs font-normal py-0 h-5">
                         {channel.category}
                       </Badge>
                       {channel.isPrivate && (
-                        <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
+                        <Badge variant="outline" className="text-xs font-normal py-0 h-5 text-muted-foreground">
                           Private
                         </Badge>
                       )}
@@ -310,19 +310,19 @@ export function ChannelsView() {
                         size="sm"
                         disabled={pending}
                         onClick={() => handleOpenChannel(channel.id)}
-                        className="h-8 text-xs gap-1"
+                        className="h-8 px-3 text-xs font-medium gap-1.5 rounded-lg"
                       >
-                        <MessageSquare className="h-3 w-3" />
+                        <MessageSquare className="h-3.5 w-3.5" />
                         Chat
                       </Button>
-                      {channel.isOwner && <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setInviteChannel(channel)}>Invite</Button>}
+                      {channel.isOwner && <Button size="sm" variant="outline" className="h-8 px-3 text-xs font-medium rounded-lg" onClick={() => setInviteChannel(channel)}>Invite</Button>}
                       <Button
                         variant="destructive"
                         size="sm"
                         title={channel.isOwner ? "Channel owners cannot leave their channel" : undefined}
                         disabled={pending || channel.isOwner}
                         onClick={async () => { await toggleJoinChannel(channel.id); }}
-                        className="h-8 text-xs min-w-18"
+                        className="h-8 px-3 text-xs font-medium min-w-18 rounded-lg"
                       >
                         Leave
                       </Button>
@@ -332,8 +332,8 @@ export function ChannelsView() {
                       variant="default"
                       size="sm"
                       disabled={pending}
-                        onClick={async () => { await toggleJoinChannel(channel.id); }}
-                      className="h-8 text-xs min-w-18"
+                      onClick={async () => { await toggleJoinChannel(channel.id); }}
+                      className="h-8 px-4 text-xs font-semibold min-w-18 rounded-lg shadow-2xs"
                     >
                       Join
                     </Button>

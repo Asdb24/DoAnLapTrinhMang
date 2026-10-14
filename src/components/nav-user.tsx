@@ -36,7 +36,7 @@ import { useChatFlow } from "@/context/ChatFlowContext"
 import { UserStatusIndicator } from "@/components/common/UserStatusIndicator"
 
 export function NavUser() {
-  const { currentUser, settings, updateSettings, logout, pending } = useChatFlow()
+  const { currentUser, settings, updateSettings, logout, pending, setSettingsDialogOpen } = useChatFlow()
   const { isMobile } = useSidebar()
 
   const displayName = settings?.displayName || currentUser?.email?.split("@")[0] || "User"
@@ -104,11 +104,12 @@ export function NavUser() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem asChild>
-                <Link href="/settings" className="cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Account Settings
-                </Link>
+              <DropdownMenuItem
+                onClick={() => setSettingsDialogOpen(true)}
+                className="cursor-pointer"
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Account Settings
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleToggleTheme} className="cursor-pointer">
                 <span className="grid mr-2 w-4 h-4 shrink-0">

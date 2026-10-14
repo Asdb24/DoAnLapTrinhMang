@@ -3,6 +3,7 @@ import "./globals.css";
 import { ChatFlowProvider } from "@/context/ChatFlowContext";
 import { AppSidebar } from "@/components/app-sidebar";
 import { NewMessageDialog } from "@/components/dialogs/NewMessageDialog";
+import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { MotionProvider } from "@/components/motion-provider";
 import { appOrigin } from "@/lib/public-url.mjs";
@@ -40,6 +41,7 @@ export default function RootLayout({
           </SidebarProvider>
 
           <NewMessageDialog />
+          <SettingsDialog />
         </ChatFlowProvider>
       </MotionProvider>
       </body>

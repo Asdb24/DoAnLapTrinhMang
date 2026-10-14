@@ -14,6 +14,7 @@ import {
   FileText,
   ExternalLink,
   Image as ImageIcon,
+  Link2,
   Users,
   Bell,
   BellOff,
@@ -46,7 +47,13 @@ export function ChatRightSidebar({
   const linkItems = shared.filter(m => m.type === "link");
 
   return (
-    <aside className="w-72 sm:w-80 border-l bg-card flex flex-col h-full shrink-0 select-none animate-in slide-in-from-right-2 duration-200">
+    <>
+      <div
+        className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs md:hidden"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <aside className="fixed inset-y-0 right-0 z-50 w-full sm:w-80 max-w-[calc(100vw-2rem)] border-l bg-card flex flex-col h-full shadow-2xl md:static md:z-auto md:w-80 md:shadow-none shrink-0 select-none animate-in slide-in-from-right duration-200">
       <div className="h-16 px-4 border-b flex items-center justify-between">
         <h3 className="font-semibold text-sm">Conversation Details</h3>
         <Button
@@ -136,50 +143,37 @@ export function ChatRightSidebar({
         </div>
 
         <div className="p-4">
-          <Tabs defaultValue="files" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 h-8">
-              <TabsTrigger value="files" className="text-xs">
-                Files
-              </TabsTrigger>
-              <TabsTrigger value="media" className="text-xs">
+          <Tabs defaultValue="media" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 h-9 p-1 bg-muted/60 rounded-xl border border-border/50">
+              <TabsTrigger
+                value="media"
+                className="text-xs gap-1.5 font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs text-muted-foreground hover:text-foreground transition-all"
+              >
+                <ImageIcon className="h-3.5 w-3.5" />
                 Media
               </TabsTrigger>
-              <TabsTrigger value="links" className="text-xs">
+              <TabsTrigger
+                value="files"
+                className="text-xs gap-1.5 font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs text-muted-foreground hover:text-foreground transition-all"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Files
+              </TabsTrigger>
+              <TabsTrigger
+                value="links"
+                className="text-xs gap-1.5 font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs text-muted-foreground hover:text-foreground transition-all"
+              >
+                <Link2 className="h-3.5 w-3.5" />
                 Links
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="files" className="pt-3 space-y-2">
-              {fileItems.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-6">
-                  No files shared yet.
-                </p>
-              ) : (
-                fileItems.map((item) => (
-                  <a
-                    href={mediaUrl(item.url)}
-                    download={item.name}
-                    target="_blank" rel="noreferrer"
-                    key={item.id}
-                    className="flex items-center gap-2.5 p-2 rounded-lg border bg-background hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="h-8 w-8 rounded bg-secondary flex items-center justify-center shrink-0">
-                      <FileText className="h-4 w-4 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium truncate">{item.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{item.size} • {item.date}</p>
-                    </div>
-                  </a>
-                ))
-              )}
-            </TabsContent>
-
             <TabsContent value="media" className="pt-3">
               {mediaItems.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-6">
-                  No photos shared yet.
-                </p>
+                <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                  <ImageIcon className="h-7 w-7 stroke-[1.5] mb-2 opacity-40" />
+                  <p className="text-xs font-medium">No media shared yet</p>
+                </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {mediaItems.map((item) => (
@@ -207,11 +201,39 @@ export function ChatRightSidebar({
               )}
             </TabsContent>
 
+            <TabsContent value="files" className="pt-3 space-y-2">
+              {fileItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                  <FileText className="h-7 w-7 stroke-[1.5] mb-2 opacity-40" />
+                  <p className="text-xs font-medium">No files shared yet</p>
+                </div>
+              ) : (
+                fileItems.map((item) => (
+                  <a
+                    href={mediaUrl(item.url)}
+                    download={item.name}
+                    target="_blank" rel="noreferrer"
+                    key={item.id}
+                    className="flex items-center gap-2.5 p-2 rounded-lg border bg-background hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="h-8 w-8 rounded bg-secondary flex items-center justify-center shrink-0">
+                      <FileText className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate">{item.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{item.size} • {item.date}</p>
+                    </div>
+                  </a>
+                ))
+              )}
+            </TabsContent>
+
             <TabsContent value="links" className="pt-3 space-y-2">
               {linkItems.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-6">
-                  No links shared yet.
-                </p>
+                <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                  <Link2 className="h-7 w-7 stroke-[1.5] mb-2 opacity-40" />
+                  <p className="text-xs font-medium">No links shared yet</p>
+                </div>
               ) : (
                 linkItems.map((item) => (
                   <a
@@ -242,5 +264,6 @@ export function ChatRightSidebar({
         </div>
       </ScrollArea>
     </aside>
+    </>
   );
 }

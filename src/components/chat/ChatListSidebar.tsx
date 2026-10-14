@@ -95,7 +95,7 @@ export function ChatListSidebar() {
                 role="tab"
                 aria-selected={isTabActive}
                 onClick={() => setFilterTab(tabKey)}
-                className="relative z-10 flex items-center justify-center text-xs transition-colors py-1 px-2 rounded-md focus-visible:outline-none"
+                className="relative z-10 flex items-center justify-center text-xs transition-colors py-1 px-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               >
                 {isTabActive && (
                   <motion.div
