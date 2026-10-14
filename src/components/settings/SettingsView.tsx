@@ -3,7 +3,6 @@
 import React, { useState, useRef } from "react";
 import { useChatFlow } from "@/context/ChatFlowContext";
 import { PresenceStatus } from "@/types";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -220,14 +219,13 @@ export function SettingsView({ isModal = false, onClose }: SettingsViewProps = {
               </p>
             </div>
 
-            <Card className="border-border bg-card/60">
-              <CardHeader>
-                <CardTitle className="text-base">Profile Details</CardTitle>
-                <CardDescription className="text-xs">
+            <div className="space-y-6">
+              <div>
+                <h4 className="text-sm font-semibold text-foreground">Profile Details</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Colleagues will see this information in direct messages and channel directories.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+                </p>
+              </div>
                 <form onSubmit={handleSaveProfile} className="space-y-6">
                   {/* Avatar Upload / Pick */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
@@ -375,8 +373,7 @@ export function SettingsView({ isModal = false, onClose }: SettingsViewProps = {
                     )}
                   </div>
                 </form>
-              </CardContent>
-            </Card>
+            </div>
           </div>
         )}
 
@@ -390,8 +387,7 @@ export function SettingsView({ isModal = false, onClose }: SettingsViewProps = {
               </p>
             </div>
 
-            <Card className="border-border bg-card/60">
-              <CardContent className="p-6 space-y-6 divide-y divide-border">
+            <div className="space-y-6 divide-y divide-border/60">
                 {/* Theme Mode Toggle */}
                 <div className="flex items-center justify-between pt-0">
                   <div className="space-y-0.5 pr-4">
@@ -460,8 +456,7 @@ export function SettingsView({ isModal = false, onClose }: SettingsViewProps = {
                     aria-label="Toggle enter to send"
                   />
                 </div>
-              </CardContent>
-            </Card>
+            </div>
           </div>
         )}
 
@@ -475,8 +470,7 @@ export function SettingsView({ isModal = false, onClose }: SettingsViewProps = {
               </p>
             </div>
 
-            <Card className="border-border bg-card/60">
-              <CardContent className="p-6 space-y-6 divide-y divide-border">
+            <div className="space-y-6 divide-y divide-border/60">
                 {/* Desktop Notifications */}
                 <div className="flex items-center justify-between pt-0">
                   <div className="space-y-0.5 pr-4">
@@ -512,8 +506,7 @@ export function SettingsView({ isModal = false, onClose }: SettingsViewProps = {
                     }}
                   />
                 </div>
-              </CardContent>
-            </Card>
+            </div>
           </div>
         )}
 
@@ -527,8 +520,7 @@ export function SettingsView({ isModal = false, onClose }: SettingsViewProps = {
               </p>
             </div>
 
-            <Card className="border-border bg-card/60">
-              <CardContent className="p-0">
+            <div className="rounded-xl border border-border/60 overflow-hidden bg-background/50">
                 {blockedUsers.length === 0 ? (
                   <div className="p-8 text-center text-xs text-muted-foreground">
                     You have not blocked any users.
@@ -574,8 +566,7 @@ export function SettingsView({ isModal = false, onClose }: SettingsViewProps = {
                     </TableBody>
                   </Table>
                 )}
-              </CardContent>
-            </Card>
+            </div>
           </div>
         )}
 
@@ -590,47 +581,47 @@ export function SettingsView({ isModal = false, onClose }: SettingsViewProps = {
             </div>
 
             <div className="space-y-4">
-              {/* Clear History Card */}
-              <Card className="border-destructive/40 bg-destructive/5">
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
+              {/* Clear History Block */}
+              <div className="rounded-xl border border-destructive/25 p-5 bg-destructive/[0.03] space-y-3">
+                <div>
+                  <h4 className="text-sm font-semibold flex items-center gap-2 text-destructive">
                     <Trash2 className="h-4 w-4 text-destructive" />
                     Clear All Chat History
-                  </CardTitle>
-                  <CardDescription className="text-xs">
+                  </h4>
+                  <p className="text-xs text-muted-foreground mt-1">
                     Clears past messages from your view. Other participants keep their conversation history.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
+                  </p>
+                </div>
+                <div>
                   <Button
                     variant="destructive"
                     onClick={() => setClearHistoryDialogOpen(true)}
                   >
                     Clear All Chat History
                   </Button>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
-              {/* Delete Account Card */}
-              <Card className="border-destructive/40 bg-destructive/5">
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
+              {/* Delete Account Block */}
+              <div className="rounded-xl border border-destructive/25 p-5 bg-destructive/[0.03] space-y-3">
+                <div>
+                  <h4 className="text-sm font-semibold flex items-center gap-2 text-destructive">
                     <AlertOctagon className="h-4 w-4 text-destructive" />
                     Delete Your Account
-                  </CardTitle>
-                  <CardDescription className="text-xs">
+                  </h4>
+                  <p className="text-xs text-muted-foreground mt-1">
                     Permanently delete your profile, messages, and uploaded files. Other members keep their accounts and messages.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
+                  </p>
+                </div>
+                <div>
                   <Button
                     variant="destructive"
                     onClick={() => setDeleteAccountDialogOpen(true)}
                   >
                     Delete Account
                   </Button>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           </div>
         )}
