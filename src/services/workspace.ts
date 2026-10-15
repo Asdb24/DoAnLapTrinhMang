@@ -13,6 +13,13 @@ export function avatarUrl(value: string) {
   const [id, version] = value.slice(7).split('/');
   return `/api/avatars/${encodeURIComponent(id)}?v=${encodeURIComponent(version || '')}`;
 }
+/** Presence is projected by the database for the authenticated caller, including block privacy. */
+export async function loadProfiles(ids?: string[]): Promise<ProfileRow[]> {
+  if (ids && !ids.length) return [];
+  const rows = check(await getSupabase().rpc('list_profiles', ids ? { profile_ids: ids } : {}));
+  if (!Array.isArray(rows)) throw new Error('Profile directory returned an invalid response.');
+  return rows as unknown as ProfileRow[];
+}
 export function mapConversation(row: ConversationMetadata, userId: string): Conversation {
   const otherMember = row.members.find(member => member.user_id !== userId);
   const other = otherMember?.profile;
@@ -24,13 +31,13 @@ export function mapConversation(row: ConversationMetadata, userId: string): Conv
 export async function loadWorkspace(user: User): Promise<{state:ApiState;metadata:ConversationMetadata[]}> {
   const client=getSupabase();
   const [conversations,channels,profiles,preferences,blocked]=await Promise.all([
-    client.rpc('list_conversations'),client.rpc('list_channels'),client.from('profiles').select('*').order('display_name').limit(1000),
+    client.rpc('list_conversations'),client.rpc('list_channels'),loadProfiles(),
     client.from('user_settings').select('*').eq('user_id',user.id).single(),client.from('blocked_users').select('*').eq('user_id',user.id),
   ]);
   const metadata=check(conversations) as unknown as ConversationMetadata[];
   const channelRows=check(channels) as unknown as ChannelMetadata[];
-  const people=check(profiles) as ProfileRow[];
-  const own=people.find(profile=>profile.id===user.id) || check(await client.from('profiles').select('*').eq('id',user.id).single());
+  const people=profiles;
+  const own=people.find(profile=>profile.id===user.id) || (await loadProfiles([user.id]))[0];
   const prefs=check(preferences) as SettingsRow;
   if(!own || !prefs) throw new Error('Your profile is not ready. Please retry.');
   return {metadata,state:{currentUser:{id:user.id,email:user.email||''},migrationCompleted:true,

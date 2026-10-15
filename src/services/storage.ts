@@ -3,6 +3,7 @@ import { check } from './workspace';
 import type { AttachmentRow } from '@/types/database';
 import type { MessageAttachment } from '@/types';
 import { validateFile } from '@/lib/attachment-validation';
+import { api } from '@/lib/api';
 export { validateFile } from '@/lib/attachment-validation';
 
 const imageTypes=new Set(['image/jpeg','image/png','image/webp','image/gif']);
@@ -25,13 +26,21 @@ export async function discardAttachment(id:string) {
   // The claim serializes against send_message before any irreversible byte deletion.
   const row=check(await client.rpc('claim_attachment_discard',{target_attachment:id})) as unknown as AttachmentRow|null;
   if(!row)return;
-  check(await client.storage.from('chat-attachments').remove([row.storage_path]));
-  check(await client.rpc('discard_attachment',{target_attachment:id}));
+  try {
+    check(await client.storage.from('chat-attachments').remove([row.storage_path]));
+    check(await client.rpc('discard_attachment',{target_attachment:id}));
+  } catch (directError) {
+    // Former members must not regain byte-read access just to delete their claimed draft.
+    // The server repeats the user-bound claim and removes only that claimed path with admin authority.
+    try { await api(`/attachments/${encodeURIComponent(id)}/discard`,'POST'); }
+    catch { throw directError; }
+  }
 }
 /** Recover abandoned drafts from a previous closed tab, scoped to this authenticated owner. */
 export async function cleanAbandonedUploads(userId:string) {
-  const cutoff=new Date(Date.now()-24*60*60*1000).toISOString();
-  const rows=check(await getSupabase().from('attachments').select('id').eq('uploader_id',userId).is('message_id',null).lt('created_at',cutoff).limit(20));
+  // Identity, age and staged state are enforced by the RPC even after channel membership ends.
+  if (!userId) return;
+  const rows=check(await getSupabase().rpc('list_cleanup_attachments')) as unknown as AttachmentRow[];
   for(const row of rows)await discardAttachment(row.id);
 }
 export async function uploadAvatar(dataUrl:string,userId:string) {

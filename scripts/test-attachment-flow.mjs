@@ -58,6 +58,33 @@ try {
     }
     checks++;console.log('PASS concurrent send/discard preserves the authoritative winner and Storage policy');
   }
+  // A departing non-owner retains cleanup authority without read access.
+  const peer=createClient(url,process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,options);
+  const peerSession=must(await peer.auth.signInWithPassword(accounts[1]));
+  const channel=must(await client.rpc('create_channel',{channel_name:'Cleanup fixture',channel_description:'',channel_category:'General',private_channel:false}));
+  conversations.push(channel);
+  must(await peer.rpc('set_channel_membership',{target_conversation:channel,joined:true}));
+  const draft=must(await peer.rpc('reserve_attachment',{target_conversation:channel,upload_id:randomUUID(),file_name:'left.txt',mime_type:'text/plain',file_size:3}));
+  paths.push(draft.storage_path);must(await peer.storage.from('chat-attachments').upload(draft.storage_path,new File(['abc'],'left.txt',{type:'text/plain'})));
+  must(await admin.from('attachments').update({created_at:new Date(Date.now()-25*3600000).toISOString()}).eq('id',draft.id));
+  must(await peer.rpc('set_channel_membership',{target_conversation:channel,joined:false}));
+  assert.ok((await peer.storage.from('chat-attachments').download(draft.storage_path)).error);
+  assert.ok(must(await peer.rpc('list_cleanup_attachments')).some(row=>row.id===draft.id));
+  assert.equal(must(await client.rpc('claim_attachment_discard',{target_attachment:draft.id})),null);
+  assert.equal(must(await peer.rpc('claim_attachment_discard',{target_attachment:draft.id})).id,draft.id);
+  if(process.env.TEST_APP_ORIGIN){
+    const target=new URL(process.env.TEST_APP_ORIGIN);assert.equal(target.protocol,'https:');assert.equal(target.pathname,'/');
+    const response=await fetch(`${target.origin}/api/attachments/${draft.id}/discard`,{method:'POST',headers:{Authorization:`Bearer ${peerSession.session.access_token}`},redirect:'error'});
+    assert.equal(response.status,200,await response.text());
+    assert.equal(must(await admin.from('attachments').select('id').eq('id',draft.id)).length,0);
+    assert.ok((await admin.storage.from('chat-attachments').download(draft.storage_path)).error);
+    console.log('PASS hosted claimed-draft cleanup after leave removes bytes and reservation');
+  } else {
+    console.log('UNVERIFIED hosted leave-cleanup endpoint: set explicit TEST_APP_ORIGIN for this staging check');
+    must(await admin.storage.from('chat-attachments').remove([draft.storage_path]));
+    must(await peer.rpc('discard_attachment',{target_attachment:draft.id}));
+  }
+  checks++;console.log('PASS departed uploader can list/claim cleanup without reading bytes; unrelated uploader cannot claim');
 } finally {
   if (paths.length) must(await admin.storage.from('chat-attachments').remove(paths));
   for (const id of conversations) must(await admin.from('conversations').delete().eq('id', id));

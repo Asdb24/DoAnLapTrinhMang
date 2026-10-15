@@ -17,6 +17,8 @@
     "test:api": "npm run test:cloud",
     "db:types": "supabase gen types --linked --schema public --agent no --output-format text > src/types/database.generated.ts",
     "test:db": "node scripts/test-database.mjs",
+    "test:local": "tsx --test scripts/test-local-gateway.mts",
+    "test:package": "node scripts/test-package.mjs",
     "test:cloud": "node scripts/test-cloud.mjs",
     "test:auth": "node scripts/test-auth-callback.mjs",
     "test:secrets": "node scripts/check-client-secrets.mjs",

@@ -610,7 +610,7 @@ export function SettingsView({ isModal = false, onClose }: SettingsViewProps = {
                     Delete Your Account
                   </h4>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Permanently delete your profile, messages, and uploaded files. Other members keep their accounts and messages.
+                    Delete your account, profile, and uploaded files. Messages you already sent remain in conversation history and are no longer linked to your profile.
                   </p>
                 </div>
                 <div>
@@ -670,7 +670,7 @@ export function SettingsView({ isModal = false, onClose }: SettingsViewProps = {
               Permanently Delete Account?
             </DialogTitle>
             <DialogDescription>
-              This permanently deletes your profile, your messages, and your uploaded files, then signs you out. Other participants keep their accounts and messages.
+              This deletes your account, profile, and uploaded files, then signs you out. Messages you already sent remain in conversation history and are no longer linked to your profile. Other participants keep their accounts.
             </DialogDescription>
           </DialogHeader>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

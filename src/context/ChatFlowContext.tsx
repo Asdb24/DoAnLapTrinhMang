@@ -118,7 +118,7 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
       if(!mounted)return;
       if(userRef.current?.id===next?.id)return;
       generation.current++;userRef.current=next;setUser(next);stateRef.current=null;setState(null);
-      metadata.current=[];readPending.current.clear();setActiveConversationId(null);setNewChatDialogOpen(false);
+      metadata.current=[];readPending.current.clear();setActiveConversationId(null);setNewChatDialogOpen(false);setSettingsDialogOpen(false);
       setStatus(next?'loading':'unauthenticated');
     };
     let sawAuthEvent=false;
@@ -159,9 +159,7 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
         avatarUrl: stateRef.current?.settings.avatar,
       }, token);
     });
-    const unsubStatus = gatewayClient.onStatus(val => {
-      setRealtimeStatus(val);
-    });
+    // The authenticated database subscription determines synchronization status.
     const unsubGwError = gatewayClient.onError(err => {
       console.warn('[ChatFlow] Gateway error:', err.code, err.message);
       if (err.code === 'AUTH_FAILED') {
@@ -169,7 +167,7 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
       }
     });
 
-    return()=>{cancelled=true;clearTimeout(timer);unsubscribe();document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('online',update);unsubStatus();unsubGwError();gatewayClient.disconnect();};
+    return()=>{cancelled=true;clearTimeout(timer);unsubscribe();document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('online',update);unsubGwError();gatewayClient.disconnect();};
   },[user,refreshState,report]);
   useEffect(()=>{if(state)document.documentElement.classList.toggle('dark',state.settings.theme==='dark');},[state?.settings.theme]);
   const userId=user?.id;
@@ -200,83 +198,31 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
       if(more){const latestPage=await messagePage(id,userId,{metadata:meta()});if(valid()){replaceMessages(id,latestPage.messages,true);setHasOlder(latestPage.hasMore);}return;}
       if(valid())replaceMessages(id,mergeMessages(refreshed,newMessages),true);
     });
+    const syncMessage=(messageId:string)=>enqueue(async()=>{
+      const messages=await messagesById([messageId],id,userId,meta());
+      if(!valid())return;
+      if(messages.length)replaceMessages(id,messages);
+      else{
+        const current=stateRef.current?.conversations.find(c=>c.id===id)?.messages||[];
+        replaceMessages(id,current.filter(m=>m.id!==messageId),true);
+      }
+      // Sidebar preview and unread counts also come from the database, never packet fields.
+      if(valid())await refreshState();
+    });
     const unsubscribe=subscribeConversation(id,{
-      status:value=>{if(valid())setRealtimeStatus(value);},reconcile,
-      message:(messageId,deleted)=>enqueue(async()=>{
-        if(deleted){const current=stateRef.current?.conversations.find(c=>c.id===id)?.messages||[];replaceMessages(id,current.filter(m=>m.id!==messageId),true);return;}
-        const messages=await messagesById([messageId],id,userId,meta());if(valid())replaceMessages(id,messages);
-      }),
+      status:value=>{if(valid())setRealtimeStatus(value);},reconcile,message:syncMessage,
     });
     reconcileActive.current=reconcile;
     const onVisible=()=>{if(document.visibilityState==='visible')reconcile();};
     window.addEventListener('online',reconcile);document.addEventListener('visibilitychange',onVisible);
 
     gatewayClient.joinRoom(id);
-    const unsubGwMessage = gatewayClient.onMessage(gwMsg => {
-      if (gwMsg.roomId === id && valid()) {
-        const incomingMsg: MessageType = {
-          id: gwMsg.id,
-          clientMessageId: gwMsg.clientMsgId,
-          senderId: gwMsg.senderId,
-          senderName: gwMsg.senderName,
-          senderAvatar: gwMsg.senderAvatar,
-          content: gwMsg.content,
-          createdAt: gwMsg.createdAt,
-          timestamp: new Date(gwMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          date: new Date(gwMsg.createdAt).toLocaleDateString(),
-          isSentByMe: gwMsg.senderId === userRef.current?.id,
-          status: 'sent',
-          attachments: (gwMsg.attachments || []).map(a => ({
-            id: a.id,
-            name: a.name,
-            size: `${(a.size / 1024).toFixed(1)} KB`,
-            type: (a.mimeType.startsWith('image/') ? 'image' : a.mimeType === 'application/pdf' ? 'pdf' : 'doc') as 'image' | 'pdf' | 'doc',
-            url: a.url,
-          })),
-          media: gwMsg.media,
-        };
-        replaceMessages(id, [incomingMsg]);
-      }
-      const current = stateRef.current;
-      if (current) {
-        const isCurrentActive = activeRef.current === gwMsg.roomId;
-        const updated = current.conversations.map(conv => {
-          if (conv.id === gwMsg.roomId) {
-            return {
-              ...conv,
-              lastMessage: gwMsg.content,
-              lastMessageTime: new Date(gwMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              unreadCount: isCurrentActive ? conv.unreadCount : (conv.unreadCount + 1),
-            };
-          }
-          return conv;
-        });
-        apply({ ...current, conversations: updated });
-      }
+    const unsubGwChanged=gatewayClient.onMessageChanged(packet=>{
+      if(packet.roomId===id&&valid())syncMessage(packet.messageId);
     });
 
-    const unsubGwEdited = gatewayClient.onMsgEdited(pkt => {
-      if (pkt.roomId === id && valid()) {
-        const currentMsgs = stateRef.current?.conversations.find(c => c.id === id)?.messages || [];
-        const target = currentMsgs.find(m => m.id === pkt.messageId);
-        if (target) {
-          replaceMessages(id, [{ ...target, content: pkt.newContent, isEdited: true }]);
-        }
-      }
-    });
-
-    const unsubGwDeleted = gatewayClient.onMsgDeleted(pkt => {
-      if (pkt.roomId === id && valid()) {
-        const currentMsgs = stateRef.current?.conversations.find(c => c.id === id)?.messages || [];
-        const target = currentMsgs.find(m => m.id === pkt.messageId);
-        if (target) {
-          replaceMessages(id, [{ ...target, isDeleted: true, content: 'Message deleted', attachments: [], media: null, reactions: [] }]);
-        }
-      }
-    });
-
-    return()=>{cancelled=true;reconcileActive.current=null;unsubscribe();unsubGwMessage();unsubGwEdited();unsubGwDeleted();gatewayClient.leaveRoom(id);window.removeEventListener('online',reconcile);document.removeEventListener('visibilitychange',onVisible);};
-  },[activeConversationId,userId,historyVersion,replaceMessages,report]);
+    return()=>{cancelled=true;reconcileActive.current=null;unsubscribe();unsubGwChanged();gatewayClient.leaveRoom(id);window.removeEventListener('online',reconcile);document.removeEventListener('visibilitychange',onVisible);};
+  },[activeConversationId,userId,historyVersion,replaceMessages,report,refreshState]);
   const loadOlder=useCallback(async()=>{
     const id=activeRef.current,current=userRef.current,epoch=activeEpoch.current;
     if(!id||!current||loadingMessages||!hasOlder)return false;

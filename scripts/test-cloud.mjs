@@ -93,6 +93,26 @@ try{
   check('Outsider cannot inspect sender personalization',must(await c.from('media_usage').select('*').eq('user_id',ua.id)).length===0);
   check('Client cannot forge personal usage counts',Boolean((await a.from('media_usage').insert({user_id:ua.id,type:'emoji',media_id:'🔥',use_count:999})).error));
   check('Arbitrary GIF host rejected',Boolean((await a.rpc('send_message',{target_conversation:id,message_content:'',client_id:randomUUID(),message_media:{...gifMedia,mediaUrl:'https://evil.example/file.gif'}})).error));
+  // Run only against a staged project with the remediation migration applied.
+  check('Outsider cannot edit a known private message',Boolean((await c.rpc('edit_message',{target_message:helloB.id,new_content:'Unauthorized replacement'})).error));
+  must(await a.rpc('edit_message',{target_message:helloB.id,new_content:'Edited old message'}));
+  const previewBeforeRecall=must(await a.rpc('list_conversations')).find(row=>row.id===id).last_message_preview;
+  check('Editing an older message does not replace the current preview',previewBeforeRecall==='Hello 👍🏽 ❤️');
+  must(await a.rpc('delete_message',{target_message:fileMessage.id}));
+  const tombstone=must(await b.from('messages').select('content,media,message_type,deleted_at').eq('id',fileMessage.id).single());
+  check('Direct recipient API receives only a sanitized recall tombstone',tombstone.content===''&&tombstone.media===null&&tombstone.message_type==='system'&&Boolean(tombstone.deleted_at));
+  check('Recipient cannot read recalled attachment metadata',must(await b.from('attachments').select('*').eq('id',attachment.id)).length===0);
+  check('Recipient cannot download recalled bytes',Boolean((await b.storage.from('chat-attachments').download(attachment.storage_path)).error));
+  check('Raw profile presence is not readable',Boolean((await b.from('profiles').select('presence').eq('id',ua.id)).error));
+  must(await a.rpc('update_my_settings',{settings:{presence:'online'}}));
+  must(await a.rpc('set_blocked',{target_user:ub.id,blocked:true}));
+  check('Presence authorization honors both block directions',must(await a.rpc('can_observe_presence',{target_user:ub.id}))===false&&must(await b.rpc('can_observe_presence',{target_user:ua.id}))===false);
+  const visibleProfiles=must(await b.rpc('list_profiles',{profile_ids:[ua.id,ub.id]}));
+  check('Blocked peer profile projection hides presence',visibleProfiles.find(row=>row.id===ua.id).presence==='offline');
+  const visibleConversation=must(await b.rpc('list_conversations')).find(row=>row.id===id);
+  check('Embedded conversation profile does not bypass block privacy',visibleConversation.members.find(member=>member.user_id===ua.id).profile.presence==='offline');
+  must(await a.rpc('set_blocked',{target_user:ub.id,blocked:false}));
+  check('Unblocking restores presence authorization',must(await b.rpc('can_observe_presence',{target_user:ua.id}))===true);
   await b.removeChannel(lb.channel);
   const missed=must(await a.rpc('send_message',{target_conversation:id,message_content:'Sent while B was offline',client_id:randomUUID()}));
   const lb2=listener(b,id);await lb2.ready;

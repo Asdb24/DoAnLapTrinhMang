@@ -1,8 +1,19 @@
 # Production deployment
 
-This runbook targets the Phase 1 **Next.js 16 / React 19** application with Supabase Auth, PostgreSQL/RLS/RPC, Realtime, and private Storage. It is not a static-site or SQLite deployment. Keep the existing shadcn/ui and Tailwind assets in the application build.
+This runbook targets **Next.js 16 / React 19**, Supabase and custom gateway protocol 2.0. Keep the existing shadcn/ui and Tailwind assets in the application build.
 
-**Implemented baseline:** Next.js 16.3.6 / React 19.3.0, Proxy-based session refresh, asynchronous route parameters, centralized `NEXT_PUBLIC_APP_URL` validation, recovery and media/personalization are implemented. The verification run passed production build, typecheck/lint, 100 UI/service tests and a scan of 26 browser artifacts, with two-user browser checks completed. See the [VERIFICATION.md](VERIFICATION.md) for the detailed evidence. Public hosting/domain configuration and actual SMTP inbox delivery remain deployment work; local and Cloud tests do not establish those. Current contracts are in [API.md](API.md).
+The remediation migration and coordinated app/gateway/desktop changes are local release artifacts. New cloud deployment, SMTP delivery and real-account desktop deletion remain unverified. Read the current [VERIFICATION.md](VERIFICATION.md) separately from historical Phase 1 results. Current contracts are in [API.md](API.md).
+
+## Remediation release order and compatibility
+
+1. Review all eleven repository migrations against target history. Take the target's database and Storage backup/restore measures. Never rewrite the ten historical migrations; apply `20261014000000_remediation.sql` as one transaction in staging first. Verify private audit grants, profile column grants, sanitized RPCs, recall backfill and preview recomputation.
+2. Treat schema, web client, protocol 2.0 gateway and desktop build as a coordinated release. Old clients use raw profile presence and full-body gateway packets; they are incompatible with the new grants/protocol. Use a maintenance window or versioned gateway endpoint, retire old sessions/artifacts, and avoid exposing mismatched client/server versions.
+3. Configure the hosted Next.js service's canonical HTTPS origin and server-only admin key. Deploy verified account deletion and claimed draft cleanup routes. Verify identity/origin/timeout behavior with disposable staging accounts. This hosted origin also serves Electron forwarding.
+4. Configure gateway `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (public key, never service role), writable private `UPLOAD_DIR`, and optional host-only `GATEWAY_DOWNLOAD_SECRET` of at least 32 characters. Set `PORT` behind TLS/WSS. `GATEWAY_MAX_UPLOADS` defaults to 32 and `GATEWAY_STORAGE_BYTES` to 10 GiB. The provider rechecks caller JWT/RLS; missing config or outages fail closed. Plan provider request capacity and file retention; no load-capacity claim is made by local tests.
+5. Build the web/desktop client with correct public Supabase, app and gateway URLs. Set `CHATFLOW_ACCOUNT_API_URL=https://<HOST>/api/account` and `CHATFLOW_ACCOUNT_API_ALLOWED_ORIGINS=https://<HOST>` in build/runtime public configuration. Electron sets its own loopback origin/runtime marker; never put those markers in a config file. Keep all admin, JWT signing, database and SMTP secrets off desktop machines.
+6. Run local gates below, package with `npx electron-builder --win --publish never`, run `npm run test:secrets` again and `npm run test:package`. Then run cloud/auth/attachment integration with the explicitly selected staging target. Exercise two real browser sessions and the packaged Electron UI, including token refresh, block/unblock, leave cleanup and disposable self-deletion. Record unrun checks as release gaps.
+
+Rollback needs a compatible app/gateway pair. A UI rollback alone does not restore profile grants or recalled content. Redacted originals are private audit data, not a reason to grant browser access. Prefer a reviewed forward-fix migration; do not revert redaction or expose old audit rows to support an old client.
 
 ## 1. Choose the production origin
 
@@ -26,6 +37,9 @@ npm run typecheck
 npm run lint
 npm test
 npm run test:db
+npm --prefix gateway ci
+npm --prefix gateway test
+npm run test:local
 npm run build
 npm run test:secrets
 ```
@@ -50,6 +64,9 @@ Enter secrets through your host's secret manager. Do not commit `.env.local`, ex
 | `SUPABASE_ACCESS_TOKEN` | Deployment tooling only | Supabase CLI automation; interactive CLI login is an alternative |
 | `SUPABASE_DB_PASSWORD` | Deployment tooling only, if required | Database connection credential for the CLI; not an application runtime requirement |
 | `TEST_APP_ORIGIN` | Test tooling only | Explicit canonical HTTPS origin for hosted callback/account integration tests |
+| `NEXT_PUBLIC_GATEWAY_URL` | Public; build/runtime | Protocol 2.0 WSS endpoint |
+| `CHATFLOW_ACCOUNT_API_URL` | Public; desktop runtime config | Fixed trusted hosted HTTPS account endpoint |
+| `CHATFLOW_ACCOUNT_API_ALLOWED_ORIGINS` | Public; desktop runtime config | Comma-separated exact HTTPS origins allowed for that endpoint |
 
 Public configuration template, deliberately unusable until placeholders are replaced:
 
@@ -65,7 +82,7 @@ Next.js public environment values are embedded into client bundles at build time
 
 ## 4. Supabase project and migrations
 
-Select the intended project and region. With the connected Supabase MCP, inspect migration history, actual RPC signatures, bucket policy/settings, and the publication before applying changes. Compare with repository SQL; never assume a local file proves a remote migration ran. Read-only MCP inspection confirmed all nine local migrations applied remotely: `20260919000000` through `20260919000006`, `20260922200503_media_personalization`, and `20260923114208_attachment_discard_claim`. The last migration includes discard serialization and service-role CHECK-helper permissions. Inspect any different deployment target before release.
+Select the intended project and region. Inspect actual migration history, RPC signatures, bucket policy/settings and publication before applying changes. Repository SQL is not evidence of cloud application. Historical Phase 1 inspection covered nine migrations through `20260923114208_attachment_discard_claim`; the repository now also contains message actions and remediation. Reinspect the actual target before release.
 
 Use repository migrations as the release artifact. Review/apply new migrations in staging first; take an appropriate backup and establish restore ownership before production DDL. Existing Auth/Storage/Realtime schemas are Supabase-managed. If a newly created project has not initialized Realtime infrastructure, initialize it using supported provider setup and verify the objects exist before applying migrations that reference them. Do not create fake production provider schemas; those exist only in the PGlite test bootstrap.
 

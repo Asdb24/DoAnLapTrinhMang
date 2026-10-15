@@ -13,8 +13,24 @@ permissions:
   contents: write
 
 jobs:
+  gateway-linux:
+    name: Test gateway on Linux filesystem
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: gateway/package-lock.json
+      - run: npm --prefix gateway ci
+      - run: npm --prefix gateway test
+
   build-windows:
     name: Build ChatFlow .exe
+    needs: gateway-linux
     runs-on: windows-latest
 
     steps:
@@ -42,6 +58,8 @@ jobs:
         run: |
           npm run typecheck
           npm test
+          npm run test:db
+          npm run test:local
 
       - name: Build Next.js production bundle
         env:
@@ -50,12 +68,23 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://boonwujyiwqbrraqdbdy.supabase.co' }}
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_xv9IiylFCrxZgG3WHnk7mw_as0YB9gH' }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_xv9IiylFCrxZgG3WHnk7mw_as0YB9gH' }}
+          CHATFLOW_ACCOUNT_API_URL: ${{ vars.CHATFLOW_ACCOUNT_API_URL }}
+          CHATFLOW_ACCOUNT_API_ALLOWED_ORIGINS: ${{ vars.CHATFLOW_ACCOUNT_API_ALLOWED_ORIGINS }}
         run: npm run build
+
+      - name: Check standalone and browser configuration for secrets
+        run: npm run test:secrets
 
       - name: Build Windows .exe with electron-builder
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --win --publish never
+
+      - name: Check packaged artifacts for secrets
+        run: npm run test:secrets
+
+      - name: Smoke test packaged runtime and mutation guards
+        run: npm run test:package
 
       - name: Upload Windows Executables Artifact
         uses: actions/upload-artifact@v4

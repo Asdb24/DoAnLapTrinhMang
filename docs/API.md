@@ -1,10 +1,10 @@
-# ChatAi API: Supabase production architecture
+# ChatFlow API: Supabase and gateway architecture
 
 The application uses Supabase Auth, PostgreSQL with row-level security (RLS), authorized PostgreSQL RPCs, scoped Realtime subscriptions, and private Storage. Next.js hosts the UI and a small HTTP surface for authenticated downloads, account deletion, and the auth callback. There is no production SQLite database or full-history polling API. Historical routes are separated into [LEGACY_API.md](LEGACY_API.md).
 
-This contract was checked against repository code and the connected Supabase project's migrations through `20260923114208_attachment_discard_claim` on 2026-09-23. Both buckets are private and the expected five tables are published. Provider dashboard Auth/SMTP settings are configured separately; this check does not establish that they are production-ready.
+This contract describes the local source through `20261014000000_remediation.sql`, verified on 2026-10-15. The remediation has not been applied to the connected cloud project during this work. Historical cloud results are recorded separately in [VERIFICATION.md](VERIFICATION.md); they do not verify the new migration or gateway deployment.
 
-Next.js 16.3.6 / React 19.3.0, canonical HTTPS-origin validation, recovery, GIF/sticker messages and private personalization are implemented. Nine migrations are applied on the connected project. Media uses the existing send RPC and direct provider API calls; there is no separate Next.js media HTTP endpoint.
+Next.js 16.3.6 / React 19.3.0, canonical HTTPS-origin validation, recovery, GIF/sticker messages and private personalization are implemented. The repository contains eleven migrations. Media uses the existing send RPC and direct provider API calls; there is no separate Next.js media HTTP endpoint.
 
 ## Authentication and trust boundaries
 
@@ -12,7 +12,7 @@ The browser uses `@supabase/ssr` / `supabase-js` with the project URL and publis
 
 Next.js server clients read/write the Supabase SSR cookies and validate the user with `auth.getUser()`. These are not the former `chatflow_session` cookies; do not assume all Supabase browser-managed session cookies are HttpOnly. Never use an admin key for user-facing downloads or browser requests. Membership and object access remain enforced by the user's JWT and RLS.
 
-Profiles form an authenticated directory. They include public display fields and optional usernames, not account email addresses. The caller's own email comes from Auth. Profile `role` is an editable display label; authorization comes from conversation membership roles, not user-editable profile metadata.
+Profiles form an authenticated directory through `list_profiles`. They include display fields and optional usernames, not account email addresses. Raw `profiles` SELECT grants exclude presence and activity timestamps. The caller's own email comes from Auth. Profile `role` is an editable display label; authorization comes from conversation membership roles, not user-editable profile metadata. Two-way blocks mask presence as offline and mask its activity timestamp in both this projection and embedded `list_conversations` profiles. Names/avatars remain available for contact management and unblock.
 
 ## Application HTTP endpoints
 
@@ -23,7 +23,8 @@ Paths are relative to the configured application origin. No storage path, admin 
 | `GET /api/health` | Public | `200 {"ok":true,"backend":"supabase"}` |
 | `GET /api/attachments/:id` | Authenticated; attachment UUID | Authorized bytes or `404` |
 | `GET /api/avatars/:userId?v=:version` | Authenticated; profile UUID | Current uploaded avatar bytes or `404`; `v` is a client cache-busting hint, not an object selector |
-| `DELETE /api/account` | Authenticated same-origin request with `Origin` header | `200 {"ok":true}`; requires a server-only admin key |
+| `DELETE /api/account` | Hosted: verified bearer, or confirmed cookie user with canonical `Origin`. Desktop: confirmed local cookie user with trusted loopback `Origin` | `200 {"ok":true}` after cleanup/deletion; hosted service requires a server-only admin key |
+| `POST /api/attachments/:id/discard` | Same identity/origin guards; only a verified owned, unbound attachment claim | `200 {"ok":true}` after byte removal and reservation finalization, including idempotent unavailable/bound no-op |
 | `GET /auth/callback?code=...` | Auth code received from Supabase | Exchanges code for SSR session; redirects to `/reset-password` when `type=recovery`, otherwise `/` |
 | `GET /auth/callback?token_hash=...` | Email verification token hash | Verifies using `type: 'recovery'` when `type=recovery`, otherwise `'email'`; redirects to `/reset-password` or `/` respectively |
 
@@ -41,7 +42,9 @@ Responses set `Cache-Control: private, no-store`, `X-Content-Type-Options: nosni
 
 ### Account deletion
 
-The request body cannot choose a user: the route derives the target from `getUser()`. It checks the request `Origin`, removes the caller's attachment objects and avatar objects through an isolated admin client, then deletes that Auth user and signs out locally. Without `SUPABASE_SECRET_KEY` or its legacy alternative, it returns `503`.
+The request body cannot choose a user. Hosted bearer requests derive the subject from `getUser(token)` and never fall back to cookies when the header is invalid. Hosted cookie requests require canonical `Origin` and a confirmed user. The service removes the verified caller's attachment/avatar objects before deleting Auth identity. Without its server-only admin key it returns `503`.
+
+Electron sets its trusted loopback origin itself. Its local route verifies the cookie subject and access token, then forwards only that user bearer token to a fixed HTTPS `CHATFLOW_ACCOUNT_API_URL`, restricted by `CHATFLOW_ACCOUNT_API_ALLOWED_ORIGINS`. Redirects are rejected and requests time out after 15 seconds. Remote failures remain retryable; no privileged local fallback exists. Cookies are signed out only after successful account deletion. These public endpoint settings may be packaged; admin credentials may not.
 
 Auth deletion cascades profiles, settings, blocks, reactions, and memberships. Messages remain with `sender_id = null`; attachment uploader references may become null and their removed objects become unavailable. A remaining channel admin/member receives ownership when possible. An empty channel is not automatically deleted by the current ownership trigger. Storage cleanup and Auth deletion are separate operations, not one cross-service transaction; a failure can leave partial cleanup requiring an operator retry. Do not promise immediate invalidation of every already-issued JWT solely because a user was deleted. [Supabase user deletion behavior](https://supabase.com/docs/guides/auth/managing-user-data).
 
@@ -51,7 +54,7 @@ Auth deletion cascades profiles, settings, blocks, reactions, and memberships. M
 
 Direct browser writes to conversations, membership, messages, attachments, reactions, and blocks are denied. Use the RPCs below. Profiles/preferences have restricted self-update grants; the UI uses the atomic settings RPC.
 
-`loadWorkspace` reads conversation/channel metadata, the authenticated profile directory ordered by display name with a 1,000-row cap, the caller's preferences, and caller-owned block records. The directory is therefore not guaranteed to contain every account in a larger installation. Message histories are fetched separately.
+`loadWorkspace` reads conversation/channel metadata, `list_profiles()` with a 1,000-row directory cap and caller prioritized, preferences, and caller-owned block records. `list_profiles(profile_ids uuid[])` hydrates selected senders; an empty array returns no profiles and omission uses the directory default. The directory is not guaranteed to contain every account in a larger installation. Message histories are fetched separately.
 
 `list_conversations()` returns a JSON array. Each item includes the conversation table columns plus:
 
@@ -91,6 +94,8 @@ Use `supabase.rpc(name, args)` and check `error` before using `data`. UUIDs are 
 | --- | --- | --- |
 | `get_or_create_direct_conversation` | `other_user_id` | UUID; atomic symmetric pair; rejects self, missing contact, or either-direction block |
 | `list_conversations` | None | JSON metadata array described above |
+| `list_profiles` | Optional `profile_ids` UUID array | Caller-scoped sanitized profile JSON array; two-way presence masking |
+| `can_observe_presence` | `target_user` UUID | Boolean; authenticated existing target and no block in either direction |
 | `list_channels` | None | JSON channel catalog described above |
 | `create_channel` | `channel_name`, `channel_description`, `channel_category`, `private_channel` | UUID; creates owner membership atomically |
 | `set_channel_membership` | `target_conversation`, `joined` | Void; idempotent public join/leave, private invitation required, owner cannot leave |
@@ -99,11 +104,14 @@ Use `supabase.rpc(name, args)` and check `error` before using `data`. UUIDs are 
 | `mark_conversation_read` | `target_conversation`, `read_message_id` | Void; verifies conversation and advances a monotonic timestamp/ID cursor |
 | `set_conversation_muted` | `target_conversation`, `muted_value` | Void; caller's membership preference only |
 | `set_reaction` | `target_message`, `reaction_emoji`, `active` | Void; explicitly set/remove caller's reaction, idempotently |
+| `edit_message` | `target_message`, `new_content` | Void; locks row, requires current membership and NULL-safe author ownership; rejects recalled messages |
+| `delete_message` | `target_message` | Void; author-only recall with the same membership/locking checks |
 | `clear_my_history` | None | Void; advances caller's clear/read cursors across memberships |
 | `set_blocked` | `target_user`, `blocked` | Void; caller-owned block, blocks new direct sends in either direction |
 | `reserve_attachment` | `target_conversation`, `upload_id`, `file_name`, `mime_type`, `file_size` | JSON `AttachmentRow`; reserves metadata, not file bytes |
 | `claim_attachment_discard` | `target_attachment` | Owned unbound attachment JSON, or null if unavailable/bound; locks out future sends before byte deletion |
 | `discard_attachment` | `target_attachment` | Void; caller-owned, claimed uncommitted reservation; remove Storage object first |
+| `list_cleanup_attachments` | None | Up to 20 caller-owned unbound reservations older than 24 hours, including claimed retries; works after leaving a conversation |
 | `update_my_settings` | `settings` JSON object | Void; atomic whitelist update |
 
 Channel categories are `Engineering`, `Design`, `Product`, `General`, or `Random`. The channel RPC trims names and accepts 1–80 characters; descriptions are at most 1,000 characters. It does not enforce globally unique names or the old SQLite slug-normalization rule.
@@ -141,7 +149,7 @@ The browser, database and bucket accept PNG/JPEG/WebP/GIF, PDF, plain text, CSV,
 
 Storage authorization preflight can contain null/empty metadata or only `mimetype`/`contentLength`. Policies validate supplied MIME and finalized `size` when present; HTTP `contentLength` is not the finalized file size. `send_message` independently requires the actual object's complete size and MIME metadata to match the reservation. Do not tighten preflight by requiring a field Storage has not yet populated, and do not weaken final commit verification.
 
-Downloads require membership and a visible attached message, or ownership of a staged upload. The uploader can delete their staged objects only after an atomic discard claim; account cleanup uses the isolated admin route. Avatar objects use a separate private `profile-avatars` bucket, a 2 MiB cap, and the same four raster-image MIME types. Any authenticated directory user can read avatars; only the path owner can insert/delete; updates/upserts are not granted.
+Downloads require membership and a visible, unrecalled attached message, or ownership of a staged upload while still a member. An uploader may list/claim an unbound draft after leaving, without gaining byte/history SELECT access. Storage DELETE can also require SELECT RLS, so the client first tries direct removal and falls back to `POST /api/attachments/:id/discard`. The hosted service repeats the user-authorized claim, validates its exact conversation/uploader/attachment path, removes only those bytes through an admin client, then finalizes with the user RPC. Bound files cannot be discarded. Avatar objects use a separate private `profile-avatars` bucket, a 2 MiB cap, and the same four raster-image MIME types. Any authenticated directory user can read avatars; only the path owner can insert/delete; updates/upserts are not granted.
 
 ## Realtime
 
@@ -168,4 +176,33 @@ GIPHY search/trending and lookup-by-ID use a small browser provider adapter, PG 
 Uploads start at file selection with concurrency two. Removed/unmounted drafts are discarded after any in-flight upload completes; submitted files remain intact while a send is unresolved. If a submitted send fails after unmount, its staged attachments are discarded through the claim workflow. Closing a browser process cannot guarantee immediate cleanup; the next authenticated workspace startup attempts the bounded stale-reservation cleanup described above. RPC success confirms the send immediately; detail hydration and inbox refresh do not determine send success. Optimistic and authoritative records reconcile by sender/client ID in either arrival order.
 
 Use [DEPLOYMENT.md](DEPLOYMENT.md) for deployment and [SMTP.md](SMTP.md) for production email. Unit/service tests mock transport boundaries. PGlite tests execute SQL/RLS but mock Auth/Storage/Realtime infrastructure; they do not certify hosted object handling or WebSocket delivery. Live tests must verify two users plus an outsider, real file bytes, read/clear behavior, reconnect, and private download denial. Record actual results in the separately maintained verification report.
+
+## Recall and previews
+
+Recall preserves message ID, author reference and cursor timestamps. A BEFORE trigger stores the original row once in `chat_private.message_audit` with no browser grants, then atomically clears public `content`/`media` and sets `type='system'`. Existing recalled rows are backfilled. Recipient raw reads, replies and Realtime public-row payloads therefore contain a tombstone, not original content. Attachment/reaction/Storage access requires a live visible parent. Bytes already downloaded or cached by recipients cannot be recalled remotely.
+
+Editing or recalling the current latest message recomputes the preview. Editing older messages does not replace the latest ID or move conversation order. Recall preview is `Message recalled`. A reaction takes a shared parent-row lock so it serializes with recall. Account deletion differs from recall: historical messages are retained with a NULL author and cannot be edited/recalled by another user.
+
+## Gateway protocol 2.0
+
+`gateway/src/protocol.ts` is the wire type contract; `packet-validation.ts` enforces runtime fields, direction and bounds. Legacy full-body packets and protocol 1.x clients are rejected. The production gateway requires a configured Supabase public-key provider. It verifies Auth identity and expiry, then uses the caller's JWT for membership/message reads and presence RPCs; it does not use an admin key.
+
+| Request / event | Required fields and result |
+| --- | --- |
+| `HELLO` | `version:'2.0'`, `token`, display fields and claimed `userId`; actual identity comes from Auth. Matching `WELCOME` precedes protected writes. Reauthentication must retain the verified subject. |
+| `JOIN_ROOM`, `LEAVE_ROOM` | `roomId`; `ROOM_ACK`. Membership is rechecked for operations and each recipient delivery. |
+| `SEND_MSG` | `roomId`, persisted `serverMsgId`, persisted `clientMsgId`; DB verifies room, author, request ID and live state before `MSG_ACK`. |
+| `EDIT_MSG`, `DELETE_MSG` | `roomId`, `messageId`; DB must already reflect the requested change. Gateway performs no database mutation. |
+| `MESSAGE_CHANGED` | Only `roomId`, `messageId`, `event:'created'|'edited'|'deleted'`. Receiver fetches actual state under RLS through the same reconciliation queue as Supabase Realtime. |
+| `TYPING`, `PRESENCE` | Gateway substitutes the authenticated sender. Recipients require valid sessions; two-way block checks apply at delivery. Typing also requires room membership. |
+| `FILE_START` | `roomId`, display `fileName`, `fileSize`, `mimeType`, `totalChunks`, full `sha256`; server returns UUID `fileId` in `FILE_ACK` (`chunkIndex:-1`). |
+| `FILE_CHUNK` | Server `fileId`, zero-based `chunkIndex`, canonical `dataBase64`; 32 KiB binary chunks, final remainder. Wait for exact index/cumulative-byte ACK before next chunk. |
+| `FILE_COMPLETE`, `FILE_ABORT` | Server `fileId`; completion verifies full digest and returns `FILE_READY`. Abort/disconnect/idle timeout releases drafts. |
+| `FILE_DOWNLOAD` | Server `fileId`; membership-checked `FILE_READY` with a short-lived private URL. |
+
+Default limits: HELLO 10 seconds, provider 5 seconds, 32 concurrent authentication operations, 1,000 sockets, 64 queued packets per socket, 64 KiB text frame, slow-consumer buffer 1 MiB; message notifications 10 per 5 seconds and all protected packets 1,000 per 5 seconds. The codec rejects oversized announced frames before allocating their payload.
+
+Gateway files use UUID paths and private owner/room manifests. Display names never select filesystem paths. Limits are 25 MiB/file, 10 MiB/image, 1 GiB/user, 10 GiB/global, two concurrent uploads/user, 32/global, 10,000 stored files and five minutes idle. Completed files count toward quota after restart. This storage is separate from Supabase attachments; the current composer continues to use Supabase Storage.
+
+`GET /uploads/:fileId?cap=...` needs an HMAC capability bound to file/room/user/socket, expiring within 60 seconds and no later than JWT expiry. HTTP rechecks the active session and current membership. Raw paths/manifests are not public. Responses use private/no-store, attachment disposition and nosniff. A disconnected session invalidates its links; request a fresh link after reconnect. `GATEWAY_DOWNLOAD_SECRET` stays on the gateway host; omission generates a process-local key that invalidates earlier links on restart. A capability is a credential and must not be logged or shared.
 

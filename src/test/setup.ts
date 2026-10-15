@@ -26,7 +26,15 @@ window.HTMLElement.prototype.scrollIntoView=function(){};
 window.HTMLElement.prototype.hasPointerCapture=function(){return false;};
 window.HTMLElement.prototype.setPointerCapture=function(){};
 window.HTMLElement.prototype.releasePointerCapture=function(){};
-beforeEach(()=>{localStorage.clear();vi.stubGlobal('ResizeObserver',class{observe(){} unobserve(){} disconnect(){}});});
+beforeEach(()=>{
+ localStorage.clear();vi.stubGlobal('ResizeObserver',class{observe(){} unobserve(){} disconnect(){}});
+ // Component tests never connect to the configured live gateway. Transport tests provide their own socket.
+ vi.stubGlobal('WebSocket',class{
+  static CONNECTING=0;static OPEN=1;static CLOSING=2;static CLOSED=3;
+  readyState=0;onopen:unknown=null;onmessage:unknown=null;onclose:unknown=null;onerror:unknown=null;
+  send(){} close(){this.readyState=3;} addEventListener(){} removeEventListener(){}
+ });
+});
 afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();vi.restoreAllMocks();bridge.current=null;});
 export function fixture():ApiState{return JSON.parse(JSON.stringify({conversations:fixtureConversations,channels:fixtureChannels,contacts:fixtureContacts,settings:fixtureSettings,blockedUsers:fixtureBlockedUsers,currentUser:{id:'user-me',email:fixtureSettings.email},migrationCompleted:true}));}
 export function json(value:unknown,status=200){return new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});}

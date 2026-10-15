@@ -443,6 +443,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_observe_presence: { Args: { target_user: string }; Returns: boolean }
       claim_attachment_discard: {
         Args: { target_attachment: string }
         Returns: Json
@@ -478,7 +479,9 @@ export type Database = {
         Returns: undefined
       }
       list_channels: { Args: never; Returns: Json }
+      list_cleanup_attachments: { Args: never; Returns: Json }
       list_conversations: { Args: never; Returns: Json }
+      list_profiles: { Args: { profile_ids?: string[] }; Returns: Json }
       mark_conversation_read: {
         Args: { read_message_id: string; target_conversation: string }
         Returns: undefined

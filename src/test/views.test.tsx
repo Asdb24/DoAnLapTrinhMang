@@ -76,6 +76,19 @@ describe('Channels and navigation',()=>{
 });
 
 describe('Settings and conversation views',()=>{
+ it('discloses retained message history and keeps account deletion retryable after a service error',async()=>{
+  const server=mockCloud();const request=vi.fn(async()=>new Response(JSON.stringify({error:'Account cleanup unavailable'}),{status:503,headers:{'Content-Type':'application/json'}}));
+  vi.stubGlobal('fetch',request);await mount(<SettingsView/>);
+  fireEvent.click(await screen.findByRole('button',{name:/danger zone/i}));
+  fireEvent.click(screen.getByRole('button',{name:'Delete Account'}));
+  const dialog=screen.getByRole('dialog');
+  expect(dialog).toHaveTextContent('Messages you already sent remain in conversation history');
+  expect(dialog).toHaveTextContent('no longer linked to your profile');
+  fireEvent.click(within(dialog).getByRole('button',{name:'Delete Account'}));
+  await waitFor(()=>expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent('Account cleanup unavailable'));
+  expect(server.client.auth.signOut).not.toHaveBeenCalled();
+  expect(within(screen.getByRole('dialog')).getByRole('button',{name:'Delete Account'})).toBeEnabled();
+ });
  it('retains profile drafts until save succeeds, and unblocks through an RPC',async()=>{
   const server=mockCloud();server.saveSettings.mockRejectedValueOnce(new Error('Profile save failed'));await mount(<SettingsView/>);fireEvent.change(screen.getByLabelText(/display name/i),{target:{value:'Taylor'}});fireEvent.click(screen.getByRole('button',{name:/save profile changes/i}));await screen.findByText('Profile save failed');expect(screen.getByLabelText(/display name/i)).toHaveValue('Taylor');expect(screen.queryByText(/profile updated successfully/i)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:/save profile changes/i}));await screen.findByText(/profile updated successfully/i);fireEvent.click(screen.getByRole('button',{name:/chat customization/i}));expect(screen.getByText('Dark / Light Mode')).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:/notifications/i}));expect(screen.getByText('Notification Preferences')).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:/blocked users/i}));fireEvent.click(screen.getAllByRole('button',{name:/unblock/i})[0]);await waitFor(()=>expect(screen.queryByText('Spam Bot 4000')).not.toBeInTheDocument());

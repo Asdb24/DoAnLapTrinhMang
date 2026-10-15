@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { serverClient } from '@/lib/supabase/server';
 import { appOrigin } from '@/lib/public-url.mjs';
+import { desktopRequestOrigin } from '@/lib/account-deletion';
 
 export async function GET(request:Request) {
   const url = new URL(request.url);
-  const origin = appOrigin(url.origin);
+  const origin = process.env.CHATFLOW_RUNTIME === 'electron' ? desktopRequestOrigin(request, process.env) : appOrigin(url.origin);
+  if (!origin) return NextResponse.json({ error: 'Invalid callback listener.' }, { status: 403 });
   const code = url.searchParams.get('code');
   const tokenHash = url.searchParams.get('token_hash');
   const recovery = url.searchParams.get('type') === 'recovery';

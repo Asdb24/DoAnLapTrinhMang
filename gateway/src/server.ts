@@ -1,909 +1,172 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { Socket } from 'node:net';
 import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto';
-import { promises as fs, createReadStream, existsSync } from 'node:fs';
-import path from 'node:path';
-import {
-  computeAcceptKey,
-  buildUpgradeResponse,
-  parseFrames,
-  encodeFrame,
-  encodePingFrame,
-  encodeCloseFrame,
-  Opcode,
-  type WebSocketFrame,
-} from './websocket-codec.js';
-import {
-  PROTOCOL_VERSION,
-  type GatewayPacket,
-  type HelloPacket,
-  type WelcomePacket,
-  type SendMsgPacket,
-  type MsgAckPacket,
-  type NewMsgPacket,
-  type EditMsgPacket,
-  type MsgEditedPacket,
-  type DeleteMsgPacket,
-  type MsgDeletedPacket,
-  type JoinRoomPacket,
-  type LeaveRoomPacket,
-  type TypingPacket,
-  type PresencePacket,
-  type FileStartPacket,
-  type FileChunkPacket,
-  type FileAckPacket,
-  type FileCompletePacket,
-  type ErrorPacket,
-} from './protocol.js';
+import { buildUpgradeResponse,computeAcceptKey,parseFrames,encodeFrame,encodeCloseFrame,Opcode,type WebSocketFrame } from './websocket-codec.js';
+import { PROTOCOL_VERSION,type ClientPacket,type GatewayPacket,type HelloPacket,type ChangeEvent } from './protocol.js';
+import { validateClientPacket,UUID } from './packet-validation.js';
+import { SupabaseAuthorizer,type GatewayAuthorizer,type AuthorizedSession } from './supabase-authorizer.js';
+import { FileTransfers,type TransferLimits } from './file-transfers.js';
 
-export interface JwtPayload {
-  sub: string;
-  email?: string;
-  role?: string;
-  exp?: number;
-  [key: string]: any;
+export interface JwtPayload { sub:string; exp:number; [key:string]:unknown }
+export function verifyHs256Jwt(token:string,secret:string):JwtPayload|null {
+  try {const [head,body,sig,...extra]=token.split('.');if(extra.length||JSON.parse(Buffer.from(head,'base64url').toString()).alg!=='HS256')return null;const expected=createHmac('sha256',secret).update(`${head}.${body}`).digest();const actual=Buffer.from(sig,'base64url');if(actual.length!==expected.length||!timingSafeEqual(actual,expected))return null;const p=JSON.parse(Buffer.from(body,'base64url').toString());return typeof p.sub==='string'&&Number.isSafeInteger(p.exp)&&p.exp*1000>Date.now()?p:null;}catch{return null;}
 }
-
-/**
- * Decodes unverified JWT payload
- */
-
-/**
- * Verifies standard HS256 JWT signature and expiry using Node.js crypto
- */
-export function verifyHs256Jwt(token: string, secret: string): JwtPayload | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [headerB64, payloadB64, signatureB64] = parts;
-
-    // Verify header algorithm
-    const headerJson = Buffer.from(headerB64, 'base64url').toString('utf8');
-    const header = JSON.parse(headerJson);
-    if (header.alg !== 'HS256') return null;
-
-    // Verify signature
-    const dataToSign = `${headerB64}.${payloadB64}`;
-    const hmac = createHmac('sha256', secret);
-    hmac.update(dataToSign);
-    const expectedSig = hmac.digest('base64url');
-
-    const sigBuf = Buffer.from(signatureB64);
-    const expBuf = Buffer.from(expectedSig);
-    if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
-      return null;
-    }
-
-    // Decode payload
-    const payloadJson = Buffer.from(payloadB64, 'base64url').toString('utf8');
-    const payload = JSON.parse(payloadJson) as JwtPayload;
-
-    // Check expiration
-    if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
-      return null;
-    }
-
-    return payload;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Generates an HS256 JWT token for tests or dev fixtures
- */
-export function createTestJwt(
-  payload: { sub: string; exp?: number; role?: string; [key: string]: any },
-  secret: string
-): string {
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const body = Buffer.from(
-    JSON.stringify({
-      exp: Math.floor(Date.now() / 1000) + 3600,
-      role: 'authenticated',
-      ...payload,
-    })
-  ).toString('base64url');
-  const signature = createHmac('sha256', secret)
-    .update(`${header}.${body}`)
-    .digest('base64url');
-  return `${header}.${body}.${signature}`;
-}
-
+export function createTestJwt(payload:{sub:string;exp?:number;[key:string]:unknown},secret:string):string {const header=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');const body=Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+3600,role:'authenticated',...payload})).toString('base64url');return `${header}.${body}.${createHmac('sha256',secret).update(`${header}.${body}`).digest('base64url')}`;}
 export interface GatewayOptions {
-  port: number;
-  uploadDir: string;
-  heartbeatIntervalMs?: number;
-  supabaseJwtSecret?: string;
-  supabaseUrl?: string;
-  authRequired?: boolean;
-  rateLimitMaxMessages?: number;
-  rateLimitWindowMs?: number;
-  maxTextFrameBytes?: number;
-  authorizeJoinRoom?: (userId: string, roomId: string) => Promise<boolean> | boolean;
+  port:number; uploadDir:string; authorizer?:GatewayAuthorizer; supabaseUrl?:string; supabasePublicKey?:string;
+  heartbeatIntervalMs?:number; helloTimeoutMs?:number; authorizationTimeoutMs?:number; maxAuthConcurrent?:number;
+  rateLimitMaxMessages?:number; rateLimitWindowMs?:number; maxTextFrameBytes?:number; maxQueuedPackets?:number;
+  maxConnections?:number; maxApplicationPackets?:number; transferLimits?:TransferLimits; downloadSecret?:string; now?:()=>number;
 }
-
 export class ClientConnection {
-  public id: string;
-  public socket: Socket;
-  public userId: string | null = null;
-  public displayName: string = 'Anonymous';
-  public avatarUrl: string = '';
-  public joinedRooms: Set<string> = new Set();
-  public isAlive: boolean = true;
-  public isAuthenticated: boolean = false;
-  public messageTimestamps: number[] = [];
-  private buffer: Buffer = Buffer.alloc(0);
-
-  constructor(socket: Socket) {
-    this.id = randomUUID();
-    this.socket = socket;
-  }
-
-  public appendData(data: Buffer): WebSocketFrame[] {
-    this.buffer = Buffer.concat([this.buffer, data]);
-    const { frames, remaining } = parseFrames(this.buffer);
-    this.buffer = remaining;
+  readonly id=randomUUID(); joinedRooms=new Set<string>(); session:AuthorizedSession|null=null; alive=true; closed=false;
+  queue:Promise<void>=Promise.resolve(); pending=0; timestamps:number[]=[]; messageTimestamps:number[]=[]; authTimestamps:number[]=[]; helloTimer?:NodeJS.Timeout; expiryTimer?:NodeJS.Timeout;
+  private buffer=Buffer.alloc(0);
+  constructor(readonly socket:Socket,private frameBudget:number) {}
+  appendData(chunk:Buffer):WebSocketFrame[] {
+    const frames:WebSocketFrame[]=[];
+    // Bound accumulation even when one TCP segment contains many frames.
+    for(let offset=0;offset<chunk.length;) {
+      const count=Math.min(chunk.length-offset,this.frameBudget+14-this.buffer.length);
+      if(count<=0)throw new Error('FRAME_TOO_LARGE');
+      this.buffer=Buffer.concat([this.buffer,chunk.subarray(offset,offset+count)]);offset+=count;
+      const parsed=parseFrames(this.buffer,this.frameBudget);frames.push(...parsed.frames);this.buffer=Buffer.from(parsed.remaining);
+    }
     return frames;
   }
-
-  public send(payload: string | Buffer, opcode: Opcode = Opcode.TEXT) {
-    if (!this.socket.writable) return;
-    const frame = encodeFrame(payload, opcode);
-    this.socket.write(frame);
-  }
-
-  public sendPacket(packet: GatewayPacket) {
-    this.send(JSON.stringify(packet), Opcode.TEXT);
-  }
-
-  public ping() {
-    if (!this.socket.writable) return;
-    this.socket.write(encodePingFrame());
-  }
-
-  public close(code = 1000, reason = 'Normal Closure') {
-    if (!this.socket.writable) return;
-    try {
-      this.socket.write(encodeCloseFrame(code, reason));
-    } catch {
-      // Ignore write errors during close
-    }
-    this.socket.end();
-  }
+  sendPacket(p:GatewayPacket) {if(!this.closed&&this.socket.writable){if(this.socket.writableLength>1024*1024){this.close(1008,'Slow consumer');return;}this.socket.write(encodeFrame(JSON.stringify(p)));}}
+  close(code=1000,reason='Closed') {if(this.closed)return;this.closed=true;this.socket.end(encodeCloseFrame(code,reason));const timer=setTimeout(()=>this.socket.destroy(),500);timer.unref();}
 }
-
 export class ChatFlowGateway {
-  private server = createServer();
-  private connections = new Map<string, ClientConnection>(); // connId -> ClientConnection
-  private userSockets = new Map<string, Set<ClientConnection>>(); // userId -> Set<conn>
-  private roomMembers = new Map<string, Set<ClientConnection>>(); // roomId -> Set<conn>
-  private recentMessages = new Map<string, { senderId: string; roomId: string; createdAt: number }>(); // messageId -> metadata
-  private fileUploads = new Map<string, {
-    fileId: string;
-    fileName: string;
-    fileSize: number;
-    mimeType: string;
-    totalChunks: number;
-    receivedChunks: Set<number>;
-    targetDir: string;
-  }>();
-
-  private heartbeatTimer: NodeJS.Timeout | null = null;
-  private options: GatewayOptions;
-
-  constructor(options: GatewayOptions) {
-    this.options = {
-      heartbeatIntervalMs: 25000,
-      rateLimitMaxMessages: 10,
-      rateLimitWindowMs: 5000,
-      maxTextFrameBytes: 64 * 1024,
-      authRequired: true,
-      ...options,
-    };
-    this.setupHttp();
-    this.setupUpgrade();
+  private server=createServer(); private connections=new Map<string,ClientConnection>(); private rooms=new Map<string,Set<ClientConnection>>();
+  private heartbeat?:NodeJS.Timeout; private cleanupTimer?:NodeJS.Timeout; private authInFlight=0; private files:FileTransfers; private provider:GatewayAuthorizer;
+  private options:Required<Pick<GatewayOptions,'heartbeatIntervalMs'|'helloTimeoutMs'|'authorizationTimeoutMs'|'maxAuthConcurrent'|'rateLimitMaxMessages'|'rateLimitWindowMs'|'maxTextFrameBytes'|'maxQueuedPackets'|'maxConnections'|'now'>> & GatewayOptions;
+  constructor(options:GatewayOptions) {
+    this.options={heartbeatIntervalMs:25000,helloTimeoutMs:10000,authorizationTimeoutMs:5000,maxAuthConcurrent:32,rateLimitMaxMessages:10,rateLimitWindowMs:5000,maxTextFrameBytes:64*1024,maxQueuedPackets:64,maxConnections:1000,maxApplicationPackets:1000,now:Date.now,...options};
+    if(!options.authorizer && (!options.supabaseUrl||!options.supabasePublicKey))throw new Error('A configured RLS authorization provider is required');
+    this.provider=options.authorizer??new SupabaseAuthorizer(options.supabaseUrl!,options.supabasePublicKey!,this.options.authorizationTimeoutMs);
+    if(['authenticate','isMember','message','canObservePresence'].some(method=>typeof (this.provider as unknown as Record<string,unknown>)[method]!=='function'))throw new Error('Invalid authorization provider');
+    for(const key of ['heartbeatIntervalMs','helloTimeoutMs','authorizationTimeoutMs','maxAuthConcurrent','rateLimitMaxMessages','rateLimitWindowMs','maxTextFrameBytes','maxQueuedPackets','maxConnections','maxApplicationPackets'] as const){const value=this.options[key];if(!Number.isSafeInteger(value)||Number(value)<=0)throw new Error('Invalid gateway limit');}
+    this.files=new FileTransfers(options.uploadDir,options.transferLimits,options.downloadSecret,this.options.now);
+    this.server.on('request',(req,res)=>{void this.http(req,res).catch(()=>{if(!res.headersSent)res.writeHead(403,{'Cache-Control':'private, no-store'});res.end();});});
+    this.server.on('upgrade',(req,socket:Socket,head)=>this.upgrade(req,socket,head));
   }
-
-  private setupHttp() {
-    this.server.on('request', async (req: IncomingMessage, res: ServerResponse) => {
-      const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
-
-      // CORS headers
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-      if (req.method === 'OPTIONS') {
-        res.writeHead(204);
-        res.end();
-        return;
-      }
-
-      // Health check endpoint
-      if (url.pathname === '/health' && req.method === 'GET') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(
-          JSON.stringify({
-            status: 'online',
-            service: 'ChatFlow Gateway (RFC 6455)',
-            version: PROTOCOL_VERSION,
-            activeConnections: this.connections.size,
-            uptimeSeconds: Math.floor(process.uptime()),
-            timestamp: new Date().toISOString(),
-          })
-        );
-        return;
-      }
-
-      // File download endpoint: /uploads/:fileId/:filename
-      if (url.pathname.startsWith('/uploads/') && req.method === 'GET') {
-        const parts = url.pathname.slice('/uploads/'.length).split('/');
-        const fileId = parts[0];
-        const fileName = parts.slice(1).join('/');
-
-        if (!fileId || !fileName || fileId.includes('..') || fileName.includes('..')) {
-          res.writeHead(400, { 'Content-Type': 'text/plain' });
-          res.end('Invalid file path');
-          return;
-        }
-
-        const filePath = path.join(this.options.uploadDir, fileId, fileName);
-        if (!existsSync(filePath)) {
-          res.writeHead(404, { 'Content-Type': 'text/plain' });
-          res.end('File not found');
-          return;
-        }
-
-        const stat = await fs.stat(filePath);
-        res.writeHead(200, {
-          'Content-Length': stat.size,
-          'Content-Disposition': `inline; filename="${encodeURIComponent(fileName)}"`,
-          'Cache-Control': 'public, max-age=86400',
-        });
-        createReadStream(filePath).pipe(res);
-        return;
-      }
-
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Not Found');
-    });
+  get port():number {const address=this.server.address();return typeof address==='object'&&address?address.port:this.options.port;}
+  private error(c:ClientConnection,code:string,id?:string) {c.sendPacket({type:'ERROR',code,message:code,id});}
+  private valid(c:ClientConnection):c is ClientConnection & {session:AuthorizedSession} {return !c.closed&&this.connections.has(c.id)&&!!c.session&&c.session.expiresAt>this.options.now();}
+  private async bounded<T>(work:()=>Promise<T>):Promise<T> {let timer:NodeJS.Timeout|undefined;try{return await Promise.race([work(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Authorization timeout')),this.options.authorizationTimeoutMs);})]);}finally{if(timer)clearTimeout(timer);}}
+  private async member(c:ClientConnection,room:string,joined=true):Promise<boolean> {if(!this.valid(c)||joined&&!c.joinedRooms.has(room))return false;const allowed=await this.bounded(()=>this.provider.isMember(c.session!,room));if(!allowed)this.leave(c,room);return allowed&&this.valid(c);}
+  private leave(c:ClientConnection,room:string) {c.joinedRooms.delete(room);const members=this.rooms.get(room);members?.delete(c);if(members?.size===0)this.rooms.delete(room);}
+  private upgrade(req:IncomingMessage,socket:Socket,head:Buffer) {
+    const key=req.headers['sec-websocket-key'];
+    if(req.headers.upgrade?.toLowerCase()!=='websocket'||typeof key!=='string'||!/^[A-Za-z0-9+/]{22}==$/.test(key)||req.headers['sec-websocket-version']!=='13'||this.connections.size>=this.options.maxConnections){socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');return;}
+    socket.write(buildUpgradeResponse(computeAcceptKey(key)));
+    const c=new ClientConnection(socket,this.options.maxTextFrameBytes);this.connections.set(c.id,c);
+    c.helloTimer=setTimeout(()=>c.close(4001,'HELLO deadline'),this.options.helloTimeoutMs);
+    const onData=(chunk:Buffer)=>{try {for(const frame of c.appendData(chunk))this.frame(c,frame);}catch(e){this.error(c,e instanceof Error&&e.message==='FRAME_TOO_LARGE'?'FRAME_TOO_LARGE':'PROTOCOL_ERROR');c.close(1009,'Invalid frame');}};
+    socket.on('data',onData);socket.on('close',()=>this.disconnect(c));socket.on('error',()=>socket.destroy());if(head.length)onData(head);
   }
-
-  private setupUpgrade() {
-    this.server.on('upgrade', (req: IncomingMessage, socket: Socket) => {
-      const upgradeHeader = req.headers['upgrade'];
-      const key = req.headers['sec-websocket-key'];
-      const version = req.headers['sec-websocket-version'];
-
-      if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket' || !key) {
-        socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
-        socket.destroy();
-        return;
-      }
-
-      if (version !== '13') {
-        socket.write('HTTP/1.1 426 Upgrade Required\r\nSec-WebSocket-Version: 13\r\n\r\n');
-        socket.destroy();
-        return;
-      }
-
-      const acceptKey = computeAcceptKey(key);
-      const upgradeResponse = buildUpgradeResponse(acceptKey);
-      socket.write(upgradeResponse);
-
-      const client = new ClientConnection(socket);
-      this.connections.set(client.id, client);
-
-      socket.on('data', (chunk: Buffer) => {
-        try {
-          const frames = client.appendData(chunk);
-          for (const frame of frames) {
-            this.handleFrame(client, frame);
-          }
-        } catch (err) {
-          console.error(`[Gateway] Error parsing frame from client ${client.id}:`, err);
-          client.close(1002, 'Protocol Error');
-        }
-      });
-
-      socket.on('close', () => {
-        this.handleClientDisconnect(client);
-      });
-
-      socket.on('error', (err) => {
-        console.error(`[Gateway] Socket error on ${client.id}:`, err.message);
-        socket.destroy();
-      });
-    });
+  private frame(c:ClientConnection,f:WebSocketFrame) {
+    if(!f.masked||!f.fin||f.opcode===Opcode.CONTINUATION||f.opcode===Opcode.BINARY){c.close(1002,'Invalid client frame');return;}
+    if(f.opcode===Opcode.PING){c.socket.write(encodeFrame(f.payload,Opcode.PONG));return;}
+    if(f.opcode===Opcode.PONG){c.alive=true;return;}
+    if(f.opcode===Opcode.CLOSE){c.close();return;}
+    if(f.opcode!==Opcode.TEXT||c.closed)return;
+    let packet:ClientPacket;
+    try {packet=validateClientPacket(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(f.payload)));}catch{this.error(c,'INVALID_PACKET');return;}
+    if(packet.type==='PING'||packet.type==='PONG'){c.alive=true;if(packet.type==='PING')c.sendPacket({type:'PONG'});return;}
+    if(c.pending>=this.options.maxQueuedPackets){this.error(c,'QUEUE_LIMIT');c.close(1008,'Queue limit');return;}
+    c.pending++;
+    c.queue=c.queue.then(async()=>{if(!c.closed)await this.dispatch(c,packet);}).catch(()=>{this.error(c,packet.type==='HELLO'?'AUTH_FAILED':'REQUEST_FAILED',packet.id);if(packet.type==='HELLO')c.close(4001,'Authentication failed');}).finally(()=>{c.pending--;});
   }
-
-  private handleFrame(client: ClientConnection, frame: WebSocketFrame) {
-    if (frame.opcode === Opcode.PING) {
-      client.send(frame.payload, Opcode.PONG);
-      return;
+  private async hello(c:ClientConnection,p:HelloPacket) {
+    if(p.version!==PROTOCOL_VERSION){this.error(c,'PROTOCOL_VERSION',p.id);c.close(4002,'Protocol version');return;}
+    c.authTimestamps=c.authTimestamps.filter(time=>this.options.now()-time<5000);
+    if(this.authInFlight>=this.options.maxAuthConcurrent||c.authTimestamps.length>=5)throw new Error('Auth busy');c.authTimestamps.push(this.options.now());
+    this.authInFlight++;let identity;
+    try {identity=await this.bounded(()=>this.provider.authenticate(p.token));}finally{this.authInFlight--;}
+    if(c.closed||!this.connections.has(c.id))return;
+    if(!UUID.test(identity.userId)||!Number.isSafeInteger(identity.expiresAt)||identity.expiresAt<=this.options.now()||c.session&&c.session.userId!==identity.userId)throw new Error('Invalid session');
+    const first=!c.session;c.session={...identity,token:p.token,sessionId:c.id};
+    if(c.helloTimer)clearTimeout(c.helloTimer);if(c.expiryTimer)clearTimeout(c.expiryTimer);
+    const expire=()=>{if(!this.valid(c)){c.close(4001,'Credentials expired');return;}c.expiryTimer=setTimeout(expire,Math.min(c.session!.expiresAt-this.options.now(),2147483647));};
+    c.expiryTimer=setTimeout(expire,Math.min(identity.expiresAt-this.options.now(),2147483647));
+    for(const room of c.joinedRooms)await this.member(c,room);
+    if(!this.valid(c))return;
+    c.sendPacket({type:'WELCOME',version:PROTOCOL_VERSION,sessionId:c.id,userId:identity.userId,expiresAt:identity.expiresAt,serverTime:this.options.now(),heartbeatIntervalMs:this.options.heartbeatIntervalMs,id:p.id});
+    if(first)await this.presence(identity.userId,'online');
+  }
+  private async dispatch(c:ClientConnection,p:ClientPacket) {
+    if(p.type==='HELLO'){await this.hello(c,p);return;}
+    if(!this.valid(c)){this.error(c,'UNAUTHORIZED',p.id);return;}
+    const now=this.options.now();c.timestamps=c.timestamps.filter(t=>now-t<this.options.rateLimitWindowMs);
+    if(c.timestamps.length>=this.options.maxApplicationPackets!){this.error(c,'RATE_LIMITED',p.id);return;}c.timestamps.push(now);
+    if(p.type==='SEND_MSG'){c.messageTimestamps=c.messageTimestamps.filter(t=>now-t<this.options.rateLimitWindowMs);if(c.messageTimestamps.length>=this.options.rateLimitMaxMessages){this.error(c,'RATE_LIMITED',p.id);return;}c.messageTimestamps.push(now);}
+    if(p.type==='JOIN_ROOM'){if(!await this.member(c,p.roomId,false)){this.error(c,'FORBIDDEN',p.id);return;}c.joinedRooms.add(p.roomId);if(!this.rooms.has(p.roomId))this.rooms.set(p.roomId,new Set());this.rooms.get(p.roomId)!.add(c);c.sendPacket({type:'ROOM_ACK',roomId:p.roomId,status:'joined',id:p.id});return;}
+    if(p.type==='LEAVE_ROOM'){this.leave(c,p.roomId);c.sendPacket({type:'ROOM_ACK',roomId:p.roomId,status:'left',id:p.id});return;}
+    if(p.type==='PRESENCE'){await this.presence(c.session.userId,p.status);return;}
+    if(p.type==='SEND_MSG'||p.type==='EDIT_MSG'||p.type==='DELETE_MSG') {
+      if(!await this.member(c,p.roomId)){this.error(c,'FORBIDDEN',p.id);return;}
+      const id=p.type==='SEND_MSG'?p.serverMsgId:p.messageId;
+      const m=await this.bounded(()=>this.provider.message(c.session!,id));
+      const event:ChangeEvent=p.type==='SEND_MSG'?'created':p.type==='EDIT_MSG'?'edited':'deleted';
+      if(!m||m.id!==id||m.conversation_id!==p.roomId||m.sender_id!==c.session.userId||p.type==='SEND_MSG'&&m.client_message_id!==p.clientMsgId||event==='created'&&!!m.deleted_at||event==='edited'&&(!m.edited_at||!!m.deleted_at)||event==='deleted'&&!m.deleted_at){this.error(c,'MESSAGE_NOT_VERIFIED',p.id);return;}
+      if(!await this.member(c,p.roomId))return;
+      c.sendPacket({type:'MSG_ACK',clientMsgId:p.type==='SEND_MSG'?p.clientMsgId:p.id??id,serverMsgId:id,roomId:p.roomId,createdAt:m.created_at,event,id:p.id});
+      await this.roomDelivery(p.roomId,{type:'MESSAGE_CHANGED',roomId:p.roomId,messageId:id,event});return;
     }
-
-    if (frame.opcode === Opcode.PONG) {
-      client.isAlive = true;
-      return;
-    }
-
-    if (frame.opcode === Opcode.CLOSE) {
-      client.close();
-      return;
-    }
-
-    if (frame.opcode === Opcode.TEXT) {
-      const maxTextBytes = this.options.maxTextFrameBytes || 64 * 1024;
-      if (frame.payload.length > maxTextBytes) {
-        console.warn(`[Gateway] Text frame exceeded max size (${frame.payload.length} > ${maxTextBytes}) for client ${client.id}`);
-        const errorPacket: ErrorPacket = {
-          type: 'ERROR',
-          code: 'FRAME_TOO_LARGE',
-          message: `Text frame exceeds maximum allowed size of ${maxTextBytes} bytes`,
-        };
-        client.sendPacket(errorPacket);
-        client.close(1009, 'Message Too Big');
-        return;
-      }
-
-      const text = frame.payload.toString('utf8');
+    if(p.type==='TYPING'){if(await this.member(c,p.roomId))await this.roomDelivery(p.roomId,{...p,userId:c.session.userId},c);return;}
+    if(p.type==='FILE_START'){if(!await this.member(c,p.roomId)){this.error(c,'FORBIDDEN',p.id);return;}const sessionId=c.id;const d=await this.files.start(c.session,p);if(!this.valid(c)){await this.files.cleanup(sessionId);return;}c.sendPacket({type:'FILE_ACK',fileId:d.fileId,chunkIndex:-1,receivedBytes:0,id:p.id});return;}
+    if(p.type==='FILE_CHUNK'||p.type==='FILE_COMPLETE'||p.type==='FILE_ABORT') {
+      const d=this.files.draft(c.session,p.fileId);
+      if(p.type==='FILE_ABORT'){await this.files.abort(c.session,p.fileId);return;}
+      if(!await this.member(c,d.roomId)){await this.files.abort(c.session,p.fileId);this.error(c,'FORBIDDEN',p.id);return;}
       try {
-        const packet = JSON.parse(text) as GatewayPacket;
-        void this.dispatchPacket(client, packet);
-      } catch {
-        const errorPacket: ErrorPacket = {
-          type: 'ERROR',
-          code: 'INVALID_JSON',
-          message: 'Received malformed JSON message',
-        };
-        client.sendPacket(errorPacket);
-      }
+        if(p.type==='FILE_CHUNK'){const state=await this.files.chunk(c.session,p.fileId,p.chunkIndex,Buffer.from(p.dataBase64,'base64'));c.sendPacket({type:'FILE_ACK',fileId:p.fileId,chunkIndex:p.chunkIndex,receivedBytes:state.receivedBytes,id:p.id});}
+        else {await this.files.complete(c.session,p.fileId);await this.fileReady(c,p.fileId,p.id);}
+      }catch(e){try{await this.files.abort(c.session,p.fileId);}catch{}throw e;}return;
+    }
+    if(p.type==='FILE_DOWNLOAD'){await this.fileReady(c,p.fileId,p.id);return;}
+  }
+  private async fileReady(c:ClientConnection,id:string,requestId?:string) {const m=this.files.manifest(id);if(!await this.member(c,m.roomId,false))throw new Error('Forbidden download');const cap=this.files.capability(c.session!,id);c.sendPacket({type:'FILE_READY',fileId:id,downloadUrl:`/uploads/${id}?cap=${encodeURIComponent(cap)}`,id:requestId});}
+  private async roomDelivery(room:string,p:GatewayPacket,typingSender?:ClientConnection) {
+    for(const recipient of [...this.rooms.get(room)??[]]) {
+      try {if(recipient===typingSender||!await this.member(recipient,room))continue;if(typingSender&&!await this.bounded(()=>this.provider.canObservePresence(recipient.session!,typingSender.session!.userId)))continue;if(this.valid(recipient))recipient.sendPacket(p);}catch{/* Fail closed for this recipient; healthy peers continue. */}
     }
   }
-
-  private async dispatchPacket(client: ClientConnection, packet: GatewayPacket) {
-    if (packet.type === 'PING') {
-      client.sendPacket({ type: 'PONG' });
-      return;
-    }
-
-    if (packet.type === 'HELLO') {
-      await this.handleHello(client, packet);
-      return;
-    }
-
-    // All packets other than PING and HELLO require authenticated session
-    if (!client.isAuthenticated || !client.userId) {
-      const errorPacket: ErrorPacket = {
-        type: 'ERROR',
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required. Send valid HELLO packet first.',
-      };
-      client.sendPacket(errorPacket);
-      return;
-    }
-
-    switch (packet.type) {
-      case 'JOIN_ROOM':
-        await this.handleJoinRoom(client, packet);
-        break;
-      case 'LEAVE_ROOM':
-        this.handleLeaveRoom(client, packet);
-        break;
-      case 'SEND_MSG':
-        this.handleSendMsg(client, packet);
-        break;
-      case 'EDIT_MSG':
-        this.handleEditMsg(client, packet);
-        break;
-      case 'DELETE_MSG':
-        this.handleDeleteMsg(client, packet);
-        break;
-      case 'TYPING':
-        this.handleTyping(client, packet);
-        break;
-      case 'PRESENCE':
-        this.handlePresence(client, packet);
-        break;
-      case 'FILE_START':
-        await this.handleFileStart(client, packet);
-        break;
-      case 'FILE_CHUNK':
-        await this.handleFileChunk(client, packet);
-        break;
-      case 'FILE_COMPLETE':
-        await this.handleFileComplete(client, packet);
-        break;
-      default:
-        console.warn(`[Gateway] Unrecognized packet type: ${(packet as any).type}`);
-    }
+  private async presence(userId:string,status:'online'|'away'|'offline') {
+    for(const c of this.connections.values()) {try{if(this.valid(c)&&await this.bounded(()=>this.provider.canObservePresence(c.session!,userId))&&this.valid(c))c.sendPacket({type:'PRESENCE',userId,status});}catch{/* Provider failure never opens visibility. */}}
   }
-
-  private async verifyAuthToken(token: string): Promise<{ valid: boolean; userId?: string; error?: string }> {
-    if (!token) {
-      return { valid: false, error: 'Token is required' };
-    }
-
-    // 1. Secret verification (HS256)
-    if (this.options.supabaseJwtSecret) {
-      const payload = verifyHs256Jwt(token, this.options.supabaseJwtSecret);
-      if (payload && payload.sub) {
-        return { valid: true, userId: payload.sub };
-      }
-      return { valid: false, error: 'Invalid or expired JWT signature' };
-    }
-
-    // 2. Supabase Auth API verification fallback (if URL provided)
-    if (this.options.supabaseUrl) {
-      try {
-        const res = await fetch(`${this.options.supabaseUrl}/auth/v1/user`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '',
-          },
-        });
-        if (res.ok) {
-          const user = (await res.json()) as { id: string };
-          if (user?.id) {
-            return { valid: true, userId: user.id };
-          }
-        }
-        return { valid: false, error: 'Token validation failed via Supabase Auth' };
-      } catch (err: any) {
-        console.error('[Gateway] Failed to verify token via Supabase Auth API:', err.message);
-        return { valid: false, error: 'Authentication service unreachable' };
-      }
-    }
-
-    return { valid: false, error: 'Gateway JWT secret or Supabase URL not configured' };
+  private disconnect(c:ClientConnection) {
+    if(!this.connections.delete(c.id))return;c.closed=true;
+    if(c.helloTimer)clearTimeout(c.helloTimer);if(c.expiryTimer)clearTimeout(c.expiryTimer);
+    for(const room of c.joinedRooms)this.leave(c,room);
+    void c.queue.then(()=>this.files.cleanup(c.id)).catch(()=>{});
+    if(c.session&&![...this.connections.values()].some(peer=>this.valid(peer)&&peer.session.userId===c.session!.userId))void this.presence(c.session.userId,'offline').catch(()=>{});
   }
-
-  private checkRateLimit(client: ClientConnection): boolean {
-    const now = Date.now();
-    const windowMs = this.options.rateLimitWindowMs || 5000;
-    const maxMessages = this.options.rateLimitMaxMessages || 10;
-
-    // Retain only timestamps within sliding window
-    client.messageTimestamps = client.messageTimestamps.filter((t) => now - t < windowMs);
-
-    if (client.messageTimestamps.length >= maxMessages) {
-      return false;
+  private async http(req:IncomingMessage,res:ServerResponse) {
+    const url=new URL(req.url??'/','http://localhost');
+    if(req.method==='GET'&&url.pathname==='/health'){res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({status:'online',service:'ChatFlow Gateway (RFC 6455)',version:PROTOCOL_VERSION}));return;}
+    if(req.method==='GET'&&/^\/uploads\/[a-f0-9-]{36}$/i.test(url.pathname)) {
+      const cap=this.files.verifyCapability(url.searchParams.get('cap')??'');const id=url.pathname.slice('/uploads/'.length);
+      const c=this.connections.get(cap.sessionId),m=this.files.manifest(id);
+      if(cap.fileId!==id||cap.roomId!==m.roomId||!c||!this.valid(c)||cap.userId!==c.session.userId||cap.expiresAt>c.session.expiresAt||!await this.member(c,m.roomId,false))throw new Error('Unauthorized download');
+      const stream=await this.files.read(id);if(!this.valid(c)){stream.destroy();throw new Error('Expired session');}
+      res.writeHead(200,{'Content-Length':m.fileSize,'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(m.fileName)}`,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'});
+      stream.on('error',()=>res.destroy());res.on('close',()=>stream.destroy());stream.pipe(res);return;
     }
-
-    client.messageTimestamps.push(now);
-    return true;
+    res.writeHead(404,{'Cache-Control':'private, no-store'});res.end('Not Found');
   }
-
-  private async handleHello(client: ClientConnection, packet: HelloPacket) {
-    const requireAuth = this.options.authRequired ?? true;
-    let verifiedUserId: string | null = null;
-
-    if (requireAuth) {
-      const token = packet.token;
-      if (!token) {
-        const error: ErrorPacket = {
-          type: 'ERROR',
-          code: 'AUTH_FAILED',
-          message: 'Authentication token is required',
-        };
-        client.sendPacket(error);
-        client.close(4001, 'Unauthorized');
-        return;
-      }
-
-      const authResult = await this.verifyAuthToken(token);
-      if (!authResult.valid || !authResult.userId) {
-        const error: ErrorPacket = {
-          type: 'ERROR',
-          code: 'AUTH_FAILED',
-          message: authResult.error || 'Invalid authentication token',
-        };
-        client.sendPacket(error);
-        client.close(4001, 'Unauthorized');
-        return;
-      }
-
-      // Strictly bind identity to verified subject (cannot forge packet.userId)
-      verifiedUserId = authResult.userId;
-    } else {
-      verifiedUserId = packet.userId || randomUUID();
-    }
-
-    client.isAuthenticated = true;
-    client.userId = verifiedUserId;
-    client.displayName = packet.displayName || 'Anonymous';
-    client.avatarUrl = packet.avatarUrl || '';
-
-    if (!this.userSockets.has(verifiedUserId)) {
-      this.userSockets.set(verifiedUserId, new Set());
-    }
-    this.userSockets.get(verifiedUserId)!.add(client);
-
-    const welcome: WelcomePacket = {
-      type: 'WELCOME',
-      sessionId: client.id,
-      userId: verifiedUserId,
-      serverTime: Date.now(),
-      heartbeatIntervalMs: this.options.heartbeatIntervalMs || 25000,
-    };
-    client.sendPacket(welcome);
-
-    // Broadcast user online status
-    this.broadcastPresence(verifiedUserId, 'online');
+  async start():Promise<void> {
+    await this.files.initialize();
+    await new Promise<void>((resolve,reject)=>{this.server.once('error',reject);this.server.listen(this.options.port,'0.0.0.0',()=>{this.server.off('error',reject);resolve();});});
+    this.heartbeat=setInterval(()=>{for(const c of this.connections.values()){if(!c.alive)c.close(1001,'Heartbeat timeout');else{c.alive=false;if(!c.closed)c.socket.write(encodeFrame('',Opcode.PING));}}},this.options.heartbeatIntervalMs);
+    this.cleanupTimer=setInterval(()=>{void this.files.cleanup().catch(()=>{});},Math.min(this.options.transferLimits?.idleMs??60000,60000));
   }
-
-  private async handleJoinRoom(client: ClientConnection, packet: JoinRoomPacket) {
-    if (!packet.roomId) return;
-
-    if (this.options.authorizeJoinRoom) {
-      const allowed = await this.options.authorizeJoinRoom(client.userId!, packet.roomId);
-      if (!allowed) {
-        client.sendPacket({
-          type: 'ERROR',
-          code: 'FORBIDDEN',
-          message: `Not authorized to join room ${packet.roomId}`,
-        });
-        return;
-      }
-    }
-
-    client.joinedRooms.add(packet.roomId);
-
-    if (!this.roomMembers.has(packet.roomId)) {
-      this.roomMembers.set(packet.roomId, new Set());
-    }
-    this.roomMembers.get(packet.roomId)!.add(client);
-
-    client.sendPacket({
-      type: 'ROOM_ACK',
-      roomId: packet.roomId,
-      status: 'joined',
-    });
-  }
-
-  private handleLeaveRoom(client: ClientConnection, packet: LeaveRoomPacket) {
-    if (!packet.roomId) return;
-    client.joinedRooms.delete(packet.roomId);
-    this.roomMembers.get(packet.roomId)?.delete(client);
-
-    client.sendPacket({
-      type: 'ROOM_ACK',
-      roomId: packet.roomId,
-      status: 'left',
-    });
-  }
-
-  private handleSendMsg(client: ClientConnection, packet: SendMsgPacket) {
-    if (!client.joinedRooms.has(packet.roomId)) {
-      client.sendPacket({
-        type: 'ERROR',
-        code: 'NOT_IN_ROOM',
-        message: `You must join room ${packet.roomId} before sending messages`,
-      });
-      return;
-    }
-
-    if (!this.checkRateLimit(client)) {
-      client.sendPacket({
-        type: 'ERROR',
-        code: 'RATE_LIMITED',
-        message: 'Rate limit exceeded: maximum 10 messages per 5 seconds',
-      });
-      return;
-    }
-
-    const serverMsgId = packet.serverMsgId || `msg_${Date.now()}_${randomUUID().slice(0, 8)}`;
-    const nowIso = packet.createdAt || new Date().toISOString();
-
-    // Store message author metadata for ownership verification
-    this.recentMessages.set(serverMsgId, {
-      senderId: client.userId!,
-      roomId: packet.roomId,
-      createdAt: Date.now(),
-    });
-    if (packet.clientMsgId) {
-      this.recentMessages.set(packet.clientMsgId, {
-        senderId: client.userId!,
-        roomId: packet.roomId,
-        createdAt: Date.now(),
-      });
-    }
-    if (this.recentMessages.size > 10000) {
-      const oldest = this.recentMessages.keys().next().value;
-      if (oldest) this.recentMessages.delete(oldest);
-    }
-
-    // 1. Send immediate ACK back to sender (1st tick)
-    const ack: MsgAckPacket = {
-      type: 'MSG_ACK',
-      clientMsgId: packet.clientMsgId,
-      serverMsgId,
-      roomId: packet.roomId,
-      createdAt: nowIso,
-    };
-    client.sendPacket(ack);
-
-    // 2. Broadcast NEW_MSG to all members in room
-    const newMsg: NewMsgPacket = {
-      type: 'NEW_MSG',
-      msg: {
-        id: serverMsgId,
-        clientMsgId: packet.clientMsgId,
-        roomId: packet.roomId,
-        senderId: client.userId!,
-        senderName: client.displayName,
-        senderAvatar: client.avatarUrl,
-        content: packet.content,
-        createdAt: nowIso,
-        attachments: packet.attachments,
-        media: packet.media,
-      },
-    };
-
-    const members = this.roomMembers.get(packet.roomId);
-    if (members) {
-      for (const member of members) {
-        member.sendPacket(newMsg);
-      }
-    }
-  }
-
-  private handleEditMsg(client: ClientConnection, packet: EditMsgPacket) {
-    if (!client.joinedRooms.has(packet.roomId)) {
-      client.sendPacket({
-        type: 'ERROR',
-        code: 'NOT_IN_ROOM',
-        message: `You must join room ${packet.roomId} before editing messages`,
-      });
-      return;
-    }
-
-    const msgRecord = this.recentMessages.get(packet.messageId);
-    if (msgRecord) {
-      if (msgRecord.senderId !== client.userId) {
-        client.sendPacket({
-          type: 'ERROR',
-          code: 'FORBIDDEN',
-          message: 'Only the author can edit this message',
-        });
-        return;
-      }
-    } else if (packet.senderId && packet.senderId !== client.userId) {
-      client.sendPacket({
-        type: 'ERROR',
-        code: 'FORBIDDEN',
-        message: 'Only the author can edit this message',
-      });
-      return;
-    }
-
-    const members = this.roomMembers.get(packet.roomId);
-    if (!members) return;
-    const nowIso = new Date().toISOString();
-    const editedPacket: MsgEditedPacket = {
-      type: 'MSG_EDITED',
-      roomId: packet.roomId,
-      messageId: packet.messageId,
-      newContent: packet.newContent,
-      updatedAt: nowIso,
-    };
-    for (const member of members) {
-      member.sendPacket(editedPacket);
-    }
-  }
-
-  private handleDeleteMsg(client: ClientConnection, packet: DeleteMsgPacket) {
-    if (!client.joinedRooms.has(packet.roomId)) {
-      client.sendPacket({
-        type: 'ERROR',
-        code: 'NOT_IN_ROOM',
-        message: `You must join room ${packet.roomId} before deleting messages`,
-      });
-      return;
-    }
-
-    const msgRecord = this.recentMessages.get(packet.messageId);
-    if (msgRecord) {
-      if (msgRecord.senderId !== client.userId) {
-        client.sendPacket({
-          type: 'ERROR',
-          code: 'FORBIDDEN',
-          message: 'Only the author can delete this message',
-        });
-        return;
-      }
-    } else if (packet.senderId && packet.senderId !== client.userId) {
-      client.sendPacket({
-        type: 'ERROR',
-        code: 'FORBIDDEN',
-        message: 'Only the author can delete this message',
-      });
-      return;
-    }
-
-    const members = this.roomMembers.get(packet.roomId);
-    if (!members) return;
-    const nowIso = new Date().toISOString();
-    const deletedPacket: MsgDeletedPacket = {
-      type: 'MSG_DELETED',
-      roomId: packet.roomId,
-      messageId: packet.messageId,
-      deletedAt: nowIso,
-    };
-    for (const member of members) {
-      member.sendPacket(deletedPacket);
-    }
-  }
-
-  private handleTyping(client: ClientConnection, packet: TypingPacket) {
-    if (!client.joinedRooms.has(packet.roomId)) return;
-
-    // Enforce authenticated sender identity
-    packet.userId = client.userId!;
-    const members = this.roomMembers.get(packet.roomId);
-    if (!members) return;
-
-    for (const member of members) {
-      if (member.id !== client.id) {
-        member.sendPacket(packet);
-      }
-    }
-  }
-
-  private handlePresence(client: ClientConnection, packet: PresencePacket) {
-    if (client.userId) {
-      this.broadcastPresence(client.userId, packet.status);
-    }
-  }
-
-  private broadcastPresence(userId: string, status: 'online' | 'away' | 'offline') {
-    const presence: PresencePacket = {
-      type: 'PRESENCE',
-      userId,
-      status,
-    };
-
-    for (const client of this.connections.values()) {
-      client.sendPacket(presence);
-    }
-  }
-
-  // --- Chunked File Transfer Handlers ---
-
-  private async handleFileStart(client: ClientConnection, packet: FileStartPacket) {
-    const targetDir = path.join(this.options.uploadDir, packet.fileId);
-    await fs.mkdir(targetDir, { recursive: true });
-
-    this.fileUploads.set(packet.fileId, {
-      fileId: packet.fileId,
-      fileName: packet.fileName,
-      fileSize: packet.fileSize,
-      mimeType: packet.mimeType,
-      totalChunks: packet.totalChunks,
-      receivedChunks: new Set(),
-      targetDir,
-    });
-
-    const ack: FileAckPacket = {
-      type: 'FILE_ACK',
-      fileId: packet.fileId,
-      chunkIndex: -1,
-      receivedBytes: 0,
-    };
-    client.sendPacket(ack);
-  }
-
-  private async handleFileChunk(client: ClientConnection, packet: FileChunkPacket) {
-    const upload = this.fileUploads.get(packet.fileId);
-    if (!upload) {
-      client.sendPacket({ type: 'ERROR', code: 'FILE_NOT_FOUND', message: 'File upload session missing' });
-      return;
-    }
-
-    const chunkPath = path.join(upload.targetDir, `part_${packet.chunkIndex.toString().padStart(6, '0')}`);
-    const chunkBuffer = Buffer.from(packet.dataBase64, 'base64');
-    await fs.writeFile(chunkPath, chunkBuffer);
-
-    upload.receivedChunks.add(packet.chunkIndex);
-
-    const ack: FileAckPacket = {
-      type: 'FILE_ACK',
-      fileId: packet.fileId,
-      chunkIndex: packet.chunkIndex,
-      receivedBytes: upload.receivedChunks.size * chunkBuffer.length,
-    };
-    client.sendPacket(ack);
-  }
-
-  private async handleFileComplete(client: ClientConnection, packet: FileCompletePacket) {
-    const upload = this.fileUploads.get(packet.fileId);
-    if (!upload) return;
-
-    // Merge all chunk parts in order
-    const finalPath = path.join(upload.targetDir, upload.fileName);
-    const parts = await fs.readdir(upload.targetDir);
-    const sortedParts = parts.filter((p) => p.startsWith('part_')).sort();
-
-    const writeStream = (await fs.open(finalPath, 'w')).createWriteStream();
-    for (const part of sortedParts) {
-      const partPath = path.join(upload.targetDir, part);
-      const data = await fs.readFile(partPath);
-      writeStream.write(data);
-      await fs.unlink(partPath); // clean temp chunk
-    }
-    await new Promise((resolve) => writeStream.end(resolve));
-
-    const downloadUrl = `/uploads/${upload.fileId}/${encodeURIComponent(upload.fileName)}`;
-
-    const complete: FileCompletePacket = {
-      type: 'FILE_COMPLETE',
-      fileId: packet.fileId,
-      downloadUrl,
-    };
-    client.sendPacket(complete);
-
-    this.fileUploads.delete(packet.fileId);
-  }
-
-  private handleClientDisconnect(client: ClientConnection) {
-    this.connections.delete(client.id);
-
-    // Remove from rooms
-    for (const roomId of client.joinedRooms) {
-      this.roomMembers.get(roomId)?.delete(client);
-    }
-
-    // Remove from user sockets
-    if (client.userId) {
-      const userSet = this.userSockets.get(client.userId);
-      if (userSet) {
-        userSet.delete(client);
-        if (userSet.size === 0) {
-          this.userSockets.delete(client.userId);
-          this.broadcastPresence(client.userId, 'offline');
-        }
-      }
-    }
-  }
-
-  public async start(): Promise<void> {
-    await fs.mkdir(this.options.uploadDir, { recursive: true });
-
-    return new Promise((resolve) => {
-      this.server.listen(this.options.port, '0.0.0.0', () => {
-        console.log(`[Gateway] ChatFlow Gateway listening on 0.0.0.0:${this.options.port}`);
-        console.log(`[Gateway] Uploads storage directory: ${this.options.uploadDir}`);
-
-        // Start heartbeat ping loop
-        this.heartbeatTimer = setInterval(() => {
-          for (const conn of this.connections.values()) {
-            if (!conn.isAlive) {
-              console.log(`[Gateway] Connection ${conn.id} missed heartbeat ping. Terminating.`);
-              conn.close(1001, 'Heartbeat Timeout');
-              this.handleClientDisconnect(conn);
-            } else {
-              conn.isAlive = false;
-              conn.ping();
-            }
-          }
-        }, this.options.heartbeatIntervalMs);
-
-        resolve();
-      });
-    });
-  }
-
-  public async stop(): Promise<void> {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-    }
-    for (const conn of this.connections.values()) {
-      conn.close(1001, 'Server Shutting Down');
-    }
-    return new Promise((resolve) => {
-      this.server.close(() => resolve());
-    });
+  async stop():Promise<void> {
+    if(this.heartbeat)clearInterval(this.heartbeat);if(this.cleanupTimer)clearInterval(this.cleanupTimer);
+    const clients=[...this.connections.values()];for(const c of clients){c.close(1001,'Shutdown');this.disconnect(c);c.socket.destroy();}
+    await Promise.all(clients.map(c=>c.queue));await this.files.cleanup(undefined);
+    await new Promise<void>(resolve=>this.server.close(()=>resolve()));
   }
 }

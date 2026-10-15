@@ -14,6 +14,7 @@ function queryClient(rows:MessageRow[]=[]) {
  const reactions=vi.fn(async()=>({data:[{message_id:rows[0]?.id,user_id:'user-me',emoji:'👍'},{message_id:rows[0]?.id,user_id:'peer',emoji:'👍'}],error:null}));
  const profiles=vi.fn(async()=>({data:[{id:'peer',display_name:'Peer',avatar_url:''}],error:null}));
  const from=vi.fn((table:string)=>table==='messages'?query:{select:()=>({in:table==='attachments'?attachments:table==='message_reactions'?reactions:profiles})});
+ server.handlers.set('list_profiles',async()=> (await profiles()).data);
  Object.assign(server.client,{from});return {server,query,from,attachments,reactions,profiles};
 }
 const row=(id:string,content=id):MessageRow=>({id,content,conversation_id:'conversation',sender_id:'peer',message_type:'text',media:null,client_message_id:'00000000-0000-0000-0000-000000000001',reply_to_id:null,created_at:'2026-09-19T00:00:00.000Z',updated_at:'2026-09-19T00:00:00.000Z',deleted_at:null,edited_at:null});
@@ -32,6 +33,13 @@ describe('message service query contracts',()=>{
  });
  it('scopes ID hydration to one conversation and hides deleted message attachments and reactions',async()=>{
   const db=queryClient([{...row('deleted'),deleted_at:'2026-09-20T00:00:00.000Z'}]);const result=await messages.messagesById(['deleted'],'conversation','user-me');expect(db.query.eq).toHaveBeenCalledWith('conversation_id','conversation');expect(db.query.in).toHaveBeenCalledWith('id',['deleted']);expect(result[0]).toMatchObject({content:'Message deleted',attachments:[],reactions:[]});
+ });
+ it('hydrates sender profiles through the caller-safe projection instead of raw presence columns',async()=>{
+  const db=queryClient([row('safe-profile')]);
+  const result=await messages.messagesById(['safe-profile'],'conversation','user-me');
+  expect(db.server.client.rpc).toHaveBeenCalledWith('list_profiles',{profile_ids:['peer']});
+  expect(db.from).not.toHaveBeenCalledWith('profiles');
+  expect(result[0].senderName).toBe('Peer');
  });
  it('merges updates by ID and orders timestamp collisions by ID',()=>{
   const result=messages.mergeMessages([message('b','old'),message('a')],[message('b','new'),message('c')]);expect(result.map(m=>m.id)).toEqual(['a','b','c']);expect(result[1].content).toBe('new');
@@ -54,6 +62,26 @@ describe('private Realtime subscription contracts',()=>{
 });
 
 describe('Storage and settings boundaries',()=>{
+ it('loads the caller-safe profile directory and preserves hidden peer presence without a raw table read',async()=>{
+  const server=mockCloud();
+  server.handlers.set('list_conversations',()=>[]);server.handlers.set('list_channels',()=>[]);
+  server.handlers.set('list_profiles',()=>[
+   {id:server.user.id,display_name:'Me',avatar_url:'',presence:'online',role:'Member',status_message:''},
+   {id:'blocked-peer',display_name:'Blocked peer',avatar_url:'',presence:'offline',username:'peer',bio:''},
+  ]);
+  const from=vi.fn((table:string)=>{
+   if(table==='user_settings')return {select:()=>({eq:()=>({single:async()=>({data:{theme:'dark',density:'cozy',enter_to_send:true,desktop_notifications:false,sound_notifications:false},error:null})})})};
+   if(table==='blocked_users')return {select:()=>({eq:async()=>({data:[{blocked_id:'blocked-peer',created_at:'2026-10-14'}],error:null})})};
+   throw new Error('Raw profile reads are not allowed');
+  });
+  Object.assign(server.client,{from});
+  const result=await workspace.loadWorkspace(server.user);
+  expect(server.client.rpc).toHaveBeenCalledWith('list_profiles',{});
+  expect(from).not.toHaveBeenCalledWith('profiles');
+  expect(result.state.settings.presence).toBe('online');
+  expect(result.state.contacts[0]).toMatchObject({name:'Blocked peer',presence:'offline'});
+  expect(result.state.blockedUsers[0].name).toBe('Blocked peer');
+ });
  it('normalizes absent/legacy browser MIME consistently and supports backend Office formats',async()=>{
   expect(storage.validateFile(new File(['x'],'slides.pptx'))).toBe('application/vnd.openxmlformats-officedocument.presentationml.presentation');
   expect(storage.validateFile(new File(['x'],'archive.zip',{type:'application/x-zip-compressed'}))).toBe('application/zip');
@@ -91,8 +119,31 @@ describe('Storage and settings boundaries',()=>{
   await expect(storage.discardAttachment('staged')).rejects.toThrow('Temporary storage failure');
   expect(server.client.rpc).not.toHaveBeenCalledWith('discard_attachment',expect.anything());
  });
+ it('uses the narrow server cleanup when departed-channel RLS prevents byte removal',async()=>{
+  const server=mockCloud();server.handlers.set('claim_attachment_discard',()=>({id:'draft',storage_path:'conv/user/file'}));
+  server.handlers.set('discard_attachment',()=>{throw new Error('Remove uploaded object before discarding reservation');});
+  Object.assign(server.client,{storage:{from:()=>({remove:async()=>({data:[],error:null})})}});
+  const request=vi.fn(async(_input:RequestInfo|URL,_init?:RequestInit)=>new Response(JSON.stringify({ok:true}),{headers:{'Content-Type':'application/json'}}));
+  vi.stubGlobal('fetch',request);
+  await expect(storage.discardAttachment('draft')).resolves.toBeUndefined();
+  expect(request).toHaveBeenCalledWith('/api/attachments/draft/discard',expect.objectContaining({method:'POST',credentials:'same-origin'}));
+  expect(request.mock.calls[0][1]).not.toHaveProperty('body',expect.anything());
+ });
  it('does not save email or an already-resolved avatar proxy as profile metadata',async()=>{
   const server=mockCloud();await workspace.saveSettings({displayName:'Updated',email:'private@example.com',avatar:'/api/avatars/user?v=1'});expect(server.client.rpc).toHaveBeenCalledWith('update_my_settings',{settings:{displayName:'Updated'}});expect(workspace.avatarUrl('avatar:user/version')).toBe('/api/avatars/user?v=version');expect(workspace.avatarUrl('javascript:alert(1)')).toBe('');
+ });
+ it('uses an owner-scoped cleanup listing without requiring departed-channel membership',async()=>{
+  const server=mockCloud();
+  server.handlers.set('list_cleanup_attachments',()=>[{id:'departed-draft'}]);
+  server.handlers.set('claim_attachment_discard',()=>({id:'departed-draft',storage_path:'departed/user/file'}));
+  const remove=vi.fn(async()=>({data:[],error:null}));
+  const from=vi.fn(()=>{throw new Error('Member-scoped table reads must not be used for cleanup');});
+  Object.assign(server.client,{from,storage:{from:()=>({remove})}});
+  await storage.cleanAbandonedUploads(server.user.id);
+  expect(server.client.rpc).toHaveBeenCalledWith('list_cleanup_attachments');
+  expect(remove).toHaveBeenCalledWith(['departed/user/file']);
+  expect(server.client.rpc).toHaveBeenCalledWith('discard_attachment',{target_attachment:'departed-draft'});
+  expect(from).not.toHaveBeenCalled();
  });
 });
 

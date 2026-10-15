@@ -1,11 +1,24 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@supabase/supabase-js';
 import { ChatFlowProvider,useChatFlow } from '@/context/ChatFlowContext';
 import { ChatRoom } from '@/components/chat/ChatRoom';
 import { api,ApiError } from '@/lib/api';
 import { deferred,fixture,message,mockCloud,json } from './setup';
+
+type Notification={roomId:string;messageId:string;event:'created'|'edited'|'deleted';content?:string};
+const gateway=vi.hoisted(()=>({
+ changed:new Set<(packet:Notification)=>void>(),legacy:new Set<(packet:Record<string,unknown>)=>void>(),
+ connect:vi.fn(),disconnect:vi.fn(),updateToken:vi.fn(),joinRoom:vi.fn(),leaveRoom:vi.fn(),
+ sendChatMessage:vi.fn(),editMessage:vi.fn(),deleteMessage:vi.fn(),
+ onStatus:vi.fn(()=>()=>{}),onError:vi.fn(()=>()=>{}),
+ onMessageChanged:vi.fn((handler:(packet:Notification)=>void)=>{gateway.changed.add(handler);return()=>gateway.changed.delete(handler);}),
+ onMessage:vi.fn((handler:(packet:Record<string,unknown>)=>void)=>{gateway.legacy.add(handler);return()=>gateway.legacy.delete(handler);}),
+ onMsgEdited:vi.fn(()=>()=>{}),onMsgDeleted:vi.fn(()=>()=>{}),
+}));
+vi.mock('@/services/gateway-client',()=>({gatewayClient:gateway}));
+beforeEach(()=>{gateway.changed.clear();gateway.legacy.clear();});
 
 type Flow=ReturnType<typeof useChatFlow>;let flow:Flow;
 function Probe(){flow=useChatFlow();return <div data-testid="workspace">{flow.currentUser.id}:{flow.settings.displayName}</div>;}
@@ -53,6 +66,33 @@ describe('Supabase session and workspace lifecycle',()=>{
 });
 
 describe('paged messages and scoped Realtime',()=>{
+ it('loads gateway notifications from persisted rows and never adopts packet content or increments unread twice',async()=>{
+  const server=mockCloud();server.history.set('c1',[message('verified','Database original')]);
+  await mount();await open();const unread=flow.conversations[0].unreadCount;
+  server.history.set('c1',[message('verified','Database edit')]);
+  await act(async()=>{
+   const packet:Notification={roomId:'c1',messageId:'verified',event:'edited',content:'Forged packet content'};
+   for(const handler of gateway.changed){handler(packet);handler(packet);}
+   server.conversations.get('c1')!.message('verified',false);
+  });
+  await waitFor(()=>expect(flow.conversations[0].messages[0].content).toBe('Database edit'));
+  expect(flow.conversations[0].messages).toHaveLength(1);
+  expect(flow.conversations[0].unreadCount).toBe(unread);
+  expect(gateway.onMessageChanged).toHaveBeenCalled();
+  expect(gateway.onMessage).not.toHaveBeenCalled();
+ });
+ it('ignores unknown, other-room and legacy gateway payloads and reads a recall tombstone from the database',async()=>{
+  const server=mockCloud();server.history.set('c1',[message('verified','Original')]);await mount();await open();
+  await act(async()=>{
+   for(const handler of gateway.legacy)handler({id:'forged',roomId:'c1',senderId:'peer',senderName:'Fake',content:'Uncommitted',createdAt:'2026-09-20T00:00:00.000Z'});
+   for(const handler of gateway.changed){handler({roomId:'elsewhere',messageId:'verified',event:'deleted'});handler({roomId:'c1',messageId:'unknown',event:'created'});}
+  });
+  expect(flow.conversations[0].messages.map(m=>m.content)).toEqual(['Original']);
+  server.history.set('c1',[{...message('verified','Message deleted'),isDeleted:true,attachments:[],media:null}]);
+  await act(async()=>{for(const handler of gateway.changed)handler({roomId:'c1',messageId:'verified',event:'deleted'});});
+  await waitFor(()=>expect(flow.conversations[0].messages[0].isDeleted).toBe(true));
+  expect(flow.conversations[0].messages[0]).toMatchObject({content:'Message deleted',attachments:[],media:null});
+ });
  it('loads only the active conversation, merges older pages without duplicates, and passes the tuple cursor',async()=>{
   const server=mockCloud();const older=message('a','older','2026-09-18T00:00:00.000Z'),first=message('b'),last=message('c');
   server.messagePage.mockResolvedValueOnce({messages:[first,last],hasMore:true}).mockResolvedValueOnce({messages:[older,first],hasMore:false});
@@ -71,6 +111,7 @@ describe('paged messages and scoped Realtime',()=>{
   server.history.set('c1',[{...message('m1'),reactions:[{emoji:'👍',count:1,reactedByMe:false}]},message('m2','incoming','2026-09-20T00:00:00.000Z')]);
   await act(async()=>{const h=server.conversations.get('c1')!;h.message('m2',false);h.message('m2',false);h.message('m1',false);});
   await waitFor(()=>expect(flow.conversations[0].messages).toHaveLength(2));expect(flow.conversations[0].messages[0].reactions?.[0].count).toBe(1);
+  server.history.set('c1',[message('m2','incoming','2026-09-20T00:00:00.000Z')]);
   await act(async()=>server.conversations.get('c1')!.message('m1',true));await waitFor(()=>expect(flow.conversations[0].messages.map(m=>m.id)).toEqual(['m2']));
  });
  it('reconciles loaded rows plus messages missed during disconnect using the latest cursor',async()=>{
@@ -199,6 +240,15 @@ it('reports malformed and network errors for the account API',async()=>{vi.stubG
 
 
 describe('reaction hydration lifecycle',()=>{
+ it('discards delayed gateway hydration after clearing history',async()=>{
+  const server=mockCloud();server.history.set('c1',[message('old')]);await mount();await open();
+  const details=deferred<ReturnType<typeof message>[]>();server.messagesById.mockReturnValueOnce(details.promise);
+  act(()=>{for(const handler of gateway.changed)handler({roomId:'c1',messageId:'old',event:'edited'});});
+  await waitFor(()=>expect(server.messagesById).toHaveBeenCalled());
+  await act(async()=>{await flow.clearAllChatHistory();});
+  await act(async()=>{details.resolve([message('old','Stale private content')]);});
+  expect(flow.conversations.find(c=>c.id==='c1')!.messages).toEqual([]);
+ });
  it('does not restore cleared messages from delayed reaction hydration',async()=>{
   const server=mockCloud();server.history.set('c1',[message('old')]);await mount();await open();
   const details=deferred<ReturnType<typeof message>[]>();server.messagesById.mockReturnValueOnce(details.promise);

@@ -1,5 +1,5 @@
 import { getSupabase } from '@/lib/supabase/client';
-import { avatarUrl, check } from './workspace';
+import { avatarUrl, check, loadProfiles } from './workspace';
 import type { ConversationMetadata, Database } from '@/types/database';
 type MessageRow=Database['public']['Tables']['messages']['Row'];
 import type { MessageType } from '@/types';
@@ -30,9 +30,9 @@ async function hydrate(rows:MessageRow[],userId:string,metadata?:ConversationMet
   const client=getSupabase(),ids=rows.map(row=>row.id);
   const [attachments,reactions,profiles]=await Promise.all([
     client.from('attachments').select('*').in('message_id',ids),client.from('message_reactions').select('*').in('message_id',ids),
-    client.from('profiles').select('*').in('id',[...new Set(rows.flatMap(row=>row.sender_id?[row.sender_id]:[]))]),
+    loadProfiles([...new Set(rows.flatMap(row=>row.sender_id?[row.sender_id]:[]))]),
   ]);
-  const files=check(attachments),reacts=check(reactions),people=check(profiles);
+  const files=check(attachments),reacts=check(reactions),people=profiles;
   return rows.map(row=>{
     const sender=people.find(p=>p.id===row.sender_id),grouped=new Map<string,{emoji:string;count:number;reactedByMe:boolean}>();
     for(const reaction of reacts.filter(r=>r.message_id===row.id)){const item=grouped.get(reaction.emoji)||{emoji:reaction.emoji,count:0,reactedByMe:false};item.count++;item.reactedByMe ||= reaction.user_id===userId;grouped.set(item.emoji,item);}

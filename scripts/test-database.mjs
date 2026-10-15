@@ -341,12 +341,16 @@ await as(0, async () => {
 
   await rpc('delete_message', [testMsg.id]);
   const deleted = (await q('select * from public.messages where id=$1', [testMsg.id]))[0];
-  assert.equal(deleted.content, 'hello edited'); count++;
+  assert.equal(deleted.content, ''); count++;
+  assert.equal(deleted.message_type, 'system'); assert.equal(deleted.media, null); count++;
   assert.ok(deleted.deleted_at !== null); count++;
 
   await denied(() => rpc('delete_message', [testMsg.id]));
   await denied(() => rpc('edit_message', [testMsg.id, 'cannot edit deleted']));
 });
+assert.equal((await q('select original_payload from chat_private.message_audit where message_id=$1',[testMsg.id]))[0].original_payload.content,'hello edited');count++;
+await as(1,()=>denied(()=>q('select * from chat_private.message_audit')));
+await as(0,()=>denied(()=>q('select * from chat_private.message_audit')));
 // Service-role writers evaluate CHECK helpers as themselves, without browser helper grants.
 await db.exec('grant insert,select,update on public.messages,public.media_usage to service_role');
 await db.exec('set role service_role');
@@ -356,16 +360,222 @@ for(const [kind,media] of [['text',null],['sticker',{kind:'sticker',id:'orb-v1-h
 await q("insert into public.media_usage(user_id,type,media_id,metadata) values($1,'emoji',$2,'{}') on conflict(user_id,type,media_id) do update set use_count=public.media_usage.use_count+1",[ids[0],'👍']);count++;
 await denied(()=>q('insert into public.messages(conversation_id,sender_id,client_message_id,content,message_type,media) values($1,$2,$3,$4,$5,$6)',[dm,ids[0],randomUUID(),'invalid fixture','sticker',{kind:'sticker',id:'unknown'}]),/messages_media_check/);
 await db.exec('reset role');
+// Public type additions are tied to executed schema contracts, not an unmigrated remote.
+const publicContracts=await q("select p.proname,p.proargnames,pg_get_function_identity_arguments(p.oid) identity_args,pg_get_function_result(p.oid) result,p.pronargdefaults defaults from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('list_profiles','can_observe_presence','list_cleanup_attachments') order by p.proname");
+assert.deepEqual(publicContracts.map(p=>[p.proname,p.identity_args,p.result,p.defaults]),[
+ ['can_observe_presence','target_user uuid','boolean',0],['list_cleanup_attachments','','jsonb',0],['list_profiles','profile_ids uuid[]','jsonb',1]
+]);count++;
+assert.equal((await q("select is_nullable from information_schema.columns where table_schema='public' and table_name='attachments' and column_name='deletion_claimed_at'"))[0].is_nullable,'YES');count++;
 for(const role of ['anon','authenticated'])for(const fn of ['valid_media(jsonb)','valid_emoji(text)']){
  assert.equal((await q("select has_function_privilege($1,$2,'execute') allowed",[role,'chat_private.'+fn]))[0].allowed,false);count++;
 }
 
+// Remediation: owner identity and current membership are independent requirements.
+await db.exec('truncate chat_private.rate_buckets');
+const formerMessage=await as(2,()=>rpc('send_message',[publicChannel,'former author',randomUUID()]));
+await as(2,()=>rpc('set_channel_membership',[publicChannel,false]));
+await as(2,async()=>{
+ await denied(()=>rpc('edit_message',[formerMessage.id,'left room']),/Conversation unavailable/);
+ await denied(()=>rpc('delete_message',[formerMessage.id]),/Conversation unavailable/);
+});
+await as(0,async()=>{
+ await denied(()=>rpc('edit_message',[formerMessage.id,'wrong author']),/Only the sender/);
+ await denied(()=>rpc('delete_message',[formerMessage.id]),/Only the sender/);
+});
+for(const signature of ['edit_message(uuid,text)','delete_message(uuid)','list_profiles(uuid[])','can_observe_presence(uuid)','list_cleanup_attachments()']){
+ const definition=(await q('select prosecdef,proconfig from pg_proc where oid=$1::regprocedure',['public.'+signature]))[0];
+ assert.equal(definition.prosecdef,true);assert.ok(definition.proconfig.includes('search_path=""'));count++;
+ assert.equal((await q("select has_function_privilege('anon',$1,'execute') allowed",['public.'+signature]))[0].allowed,false);count++;
+ assert.equal((await q("select has_function_privilege('authenticated',$1,'execute') allowed",['public.'+signature]))[0].allowed,true);count++;
+}
+
+// Recall protects all child records immediately, and keeps a readable cursor/reply target.
+const recallDraft=await as(0,()=>rpc('reserve_attachment',[dm,randomUUID(),'recall-secret.pdf','application/pdf',20]));
+await as(0,()=>q("insert into storage.objects(bucket_id,name,metadata) values('chat-attachments',$1,$2)",[recallDraft.storage_path,{size:20,mimetype:'application/pdf'}]));
+const fileRecall=await as(0,()=>rpc('send_message',[dm,'private file caption',randomUUID(),[recallDraft.id]]));
+await as(1,()=>rpc('set_reaction',[fileRecall.id,'👍',true]));
+const oldCursor=await as(0,()=>rpc('send_message',[dm,'older preview',randomUUID()]));
+const latestCursor=await as(0,()=>rpc('send_message',[dm,'latest preview',randomUUID()]));
+const inboxBefore=(await q("select count(*)::integer n from realtime.test_events where event='conversation_changed'"))[0].n;
+await as(0,async()=>{
+ await rpc('edit_message',[oldCursor.id,'old edit must not reorder']);
+ let list=(await rpc('list_conversations')).find(c=>c.id===dm);
+ assert.equal(list.last_message_id,latestCursor.id);assert.equal(list.last_message_preview,'latest preview');count++;
+ await rpc('edit_message',[latestCursor.id,'new latest preview']);
+ list=(await rpc('list_conversations')).find(c=>c.id===dm);
+ assert.equal(list.last_message_id,latestCursor.id);assert.equal(list.last_message_at,latestCursor.created_at);assert.equal(list.last_message_preview,'new latest preview');count++;
+ await rpc('delete_message',[latestCursor.id]);
+ list=(await rpc('list_conversations')).find(c=>c.id===dm);
+ assert.equal(list.last_message_id,latestCursor.id);assert.equal(list.last_message_at,latestCursor.created_at);assert.equal(list.last_message_preview,'Message recalled');count++;
+ await rpc('delete_message',[fileRecall.id]);
+});
+assert.ok((await q("select count(*)::integer n from realtime.test_events where event='conversation_changed'"))[0].n>inboxBefore);count++;
+await as(1,async()=>{
+ const tombstone=(await q('select * from public.messages where id=$1',[fileRecall.id]))[0];
+ assert.equal(tombstone.content,'');assert.equal(tombstone.media,null);assert.equal(tombstone.message_type,'system');assert.ok(tombstone.deleted_at);count++;
+ assert.equal((await q('select * from public.attachments where message_id=$1',[fileRecall.id])).length,0);count++;
+ assert.equal((await q('select * from public.message_reactions where message_id=$1',[fileRecall.id])).length,0);count++;
+ assert.equal((await q('select * from storage.objects where name=$1',[recallDraft.storage_path])).length,0);count++;
+ await denied(()=>rpc('set_reaction',[fileRecall.id,'❤️',true]),/Message unavailable/);
+ await denied(()=>q('select original_payload from chat_private.message_audit'));
+ const reply=await rpc('send_message',[dm,'reply to tombstone',randomUUID(),[],fileRecall.id]);
+ assert.equal(reply.reply_to_id,fileRecall.id);count++;
+ await rpc('mark_conversation_read',[dm,fileRecall.id]);count++;
+});
+assert.equal((await q('select original_payload from chat_private.message_audit where message_id=$1',[fileRecall.id]))[0].original_payload.content,'private file caption');count++;
+for(const mediaMessage of [gifMessage,stickerMessage]){
+ await as(0,()=>rpc('delete_message',[mediaMessage.id]));
+ await as(1,async()=>{const row=(await q('select * from public.messages where id=$1',[mediaMessage.id]))[0];assert.equal(row.media,null);assert.equal(row.content,'');assert.equal(row.message_type,'system');count++;});
+ assert.deepEqual((await q('select original_payload from chat_private.message_audit where message_id=$1',[mediaMessage.id]))[0].original_payload.media,mediaMessage.media);count++;
+}
+// A transaction failure restores both the public row and private audit atomically.
+const rollbackMessage=await as(0,()=>rpc('send_message',[dm,'rollback original',randomUUID()]));
+await db.exec('begin');
+await as(0,()=>rpc('delete_message',[rollbackMessage.id]));
+assert.equal((await q('select content from public.messages where id=$1',[rollbackMessage.id]))[0].content,'');count++;
+await db.exec('rollback');
+assert.equal((await q('select content from public.messages where id=$1',[rollbackMessage.id]))[0].content,'rollback original');count++;
+assert.equal((await q('select * from chat_private.message_audit where message_id=$1',[rollbackMessage.id])).length,0);count++;
+await denied(()=>q('update public.messages set deleted_at=null where id=$1',[fileRecall.id]),/Cannot restore/);
+await q("update public.messages set content='must stay private' where id=$1",[fileRecall.id]);
+assert.equal((await q('select content from public.messages where id=$1',[fileRecall.id]))[0].content,'');count++;
+assert.equal((await q('select original_payload from chat_private.message_audit where message_id=$1',[fileRecall.id]))[0].original_payload.content,'private file caption');count++;
+assert.equal((await q("select count(*)::integer n from pg_publication_tables where schemaname='chat_private'"))[0].n,0);count++;
+for(const role of ['anon','authenticated']){
+ assert.equal((await q("select has_table_privilege($1,'chat_private.message_audit','select') allowed",[role]))[0].allowed,false);count++;
+ assert.equal((await q("select has_function_privilege($1,'chat_private.safe_profile(uuid)','execute') allowed",[role]))[0].allowed,false);count++;
+}
+
+// Presence projections mask both blocking directions, even through embedded profiles.
+await q("update public.profiles set presence='online' where id=any($1)",[ids]);
+await as(0,async()=>{
+ await denied(()=>q('select * from public.profiles'));
+ await denied(()=>q('select presence from public.profiles where id=$1',[ids[1]]));
+ await denied(()=>q('select updated_at from public.profiles where id=$1',[ids[1]]));
+ assert.equal((await q('select id,display_name,avatar_url from public.profiles where id=$1',[ids[1]])).length,1);count++;
+ assert.equal((await rpc('list_profiles',[ids])).length,3);count++;
+ assert.equal((await rpc('list_profiles',[[]])).length,0);count++;
+ assert.equal((await rpc('list_profiles',[[ids[1]]]))[0].presence,'online');count++;
+ assert.equal(await rpc('can_observe_presence',[ids[1]]),true);count++;
+ assert.equal(await rpc('can_observe_presence',[randomUUID()]),false);count++;
+ await rpc('set_blocked',[ids[1],true]);
+ const profiles=await rpc('list_profiles',[ids]);
+ assert.equal(profiles.find(p=>p.id===ids[0]).presence,'online');count++;
+ assert.equal(profiles.find(p=>p.id===ids[1]).presence,'offline');count++;
+ assert.equal(profiles.find(p=>p.id===ids[1]).updated_at,profiles.find(p=>p.id===ids[1]).created_at);count++;
+ assert.equal(await rpc('can_observe_presence',[ids[1]]),false);count++;
+ const member=(await rpc('list_conversations')).find(c=>c.id===dm).members.find(m=>m.user_id===ids[1]);
+ assert.equal(member.profile.presence,'offline');assert.ok(member.profile.display_name);count++;
+});
+await as(1,async()=>{
+ assert.equal((await rpc('list_profiles',[[ids[0]]]))[0].presence,'offline');count++;
+ assert.equal(await rpc('can_observe_presence',[ids[0]]),false);count++;
+ assert.equal((await rpc('list_profiles',[[ids[1]]]))[0].presence,'online');count++;
+ assert.equal((await rpc('list_conversations')).find(c=>c.id===dm).members.find(m=>m.user_id===ids[0]).profile.presence,'offline');count++;
+});
+await as(0,()=>rpc('set_blocked',[ids[1],false]));
+await as(1,async()=>{assert.equal((await rpc('list_profiles',[[ids[0]]]))[0].presence,'online');count++;await rpc('set_blocked',[ids[0],true]);});
+await as(0,async()=>{assert.equal(await rpc('can_observe_presence',[ids[1]]),false);count++;assert.equal((await rpc('list_profiles',[[ids[1]]]))[0].presence,'offline');count++;});
+await as(1,()=>rpc('set_blocked',[ids[0],false]));
+await db.exec('set role anon');
+await denied(()=>rpc('list_profiles'));await denied(()=>rpc('can_observe_presence',[ids[0]]));await denied(()=>rpc('list_cleanup_attachments'));
+await db.exec('reset role');
+
+// Cleanup after leave keeps metadata scope separate from history and byte reads.
+await db.exec('truncate chat_private.rate_buckets');
+await as(2,()=>rpc('set_channel_membership',[publicChannel,true]));
+const leftDraft=await as(2,()=>rpc('reserve_attachment',[publicChannel,randomUUID(),'left.pdf','application/pdf',20]));
+await as(2,()=>q("insert into storage.objects(bucket_id,name,metadata) values('chat-attachments',$1,$2)",[leftDraft.storage_path,{size:20,mimetype:'application/pdf'}]));
+await q("update public.attachments set created_at=clock_timestamp()-interval '25 hours' where id=$1",[leftDraft.id]);
+await as(2,()=>rpc('set_channel_membership',[publicChannel,false]));
+await as(2,async()=>{
+ const drafts=await rpc('list_cleanup_attachments');
+ assert.equal(drafts.length,1);assert.equal(drafts[0].id,leftDraft.id);count++;
+ assert.equal((await q('select * from public.attachments where id=$1',[leftDraft.id])).length,0);count++;
+ assert.equal((await q('select * from public.messages where conversation_id=$1',[publicChannel])).length,0);count++;
+ assert.equal((await q('select * from storage.objects where name=$1',[leftDraft.storage_path])).length,0);count++;
+ assert.ok((await rpc('claim_attachment_discard',[leftDraft.id])).deletion_claimed_at);count++;
+ assert.equal((await q("select chat_private.storage_allowed($1,null,'delete') allowed",[leftDraft.storage_path]))[0].allowed,true);count++;
+ assert.equal((await q("select chat_private.storage_allowed($1,null,'select') allowed",[leftDraft.storage_path]))[0].allowed,false);count++;
+ // DELETE with WHERE/RETURNING additionally applies SELECT RLS. A hosted owner-bound cleanup API removes bytes.
+ assert.equal((await q('delete from storage.objects where name=$1 returning id',[leftDraft.storage_path])).length,0);count++;
+ await denied(()=>rpc('discard_attachment',[leftDraft.id]),/Remove uploaded object/);
+ await denied(()=>rpc('reserve_attachment',[publicChannel,randomUUID(),'denied.pdf','application/pdf',20]),/Conversation unavailable/);
+ await denied(()=>rpc('send_message',[publicChannel,'denied send',randomUUID(),[leftDraft.id]]),/Conversation unavailable/);
+});
+await as(0,async()=>{assert.equal(await rpc('claim_attachment_discard',[leftDraft.id]),null);count++;assert.ok(!(await rpc('list_cleanup_attachments')).some(a=>a.id===leftDraft.id));count++;});
+await q('delete from storage.objects where name=$1',[leftDraft.storage_path]); // mock trusted Storage API cleanup of bytes
+await as(2,()=>rpc('discard_attachment',[leftDraft.id]));
+assert.equal((await q('select * from public.attachments where id=$1',[leftDraft.id])).length,0);count++;
+assert.equal((await q('select coalesce(sum(file_size),0)::integer n from public.attachments where uploader_id=$1',[ids[2]]))[0].n,0);count++;
+
 await q('delete from auth.users where id=$1',[ids[0]]);
 assert.equal((await q('select sender_id from public.messages where id=$1',[msg.id]))[0].sender_id,null);count++;
+for(const userIndex of [1,2])await as(userIndex,async()=>{
+ await denied(()=>rpc('edit_message',[msg.id,'orphan hijack']));
+ await denied(()=>rpc('delete_message',[msg.id]));
+});
 assert.equal((await q('select role from public.conversation_members where conversation_id=$1 and user_id=$2',[privateChannel,ids[1]]))[0].role,'owner');count++;
 assert.equal((await q('select * from public.profiles where id=$1',[ids[0]])).length,0);count++;
 assert.equal((await q('select * from public.media_usage where user_id=$1',[ids[0]])).length,0);count++;
 assert.equal((await q("select count(*)::integer n from public.media_usage where user_id=$1 and type='gif'",[ids[1]]))[0].n,500);count++;
+// Both projection and cleanup discovery are bounded, including callers beyond the directory page.
+await q("insert into auth.users(id,raw_user_meta_data) select gen_random_uuid(),jsonb_build_object('display_name','AAA Directory '||g) from generate_series(1,1001) g");
+await as(2,async()=>{
+ const profiles=await rpc('list_profiles');assert.equal(profiles.length,1000);assert.ok(profiles.some(p=>p.id===ids[2]));count++;
+ const outside=(await q("select id from public.profiles where display_name='AAA Directory 999'"))[0].id;
+ assert.equal((await rpc('list_profiles',[[outside]]))[0].id,outside);count++;
+ await denied(()=>rpc('list_profiles',[Array(1001).fill(ids[2])]),/Too many profiles/);
+});
+await q("insert into public.attachments(id,conversation_id,uploader_id,storage_path,file_name,mime_type,file_size,created_at) select gen_random_uuid(),$1,$2::uuid,($2::uuid)::text||'/'||gen_random_uuid(),'bounded.pdf','application/pdf',20,clock_timestamp()-interval '25 hours' from generate_series(1,22)",[publicChannel,ids[2]]);
+await as(2,async()=>{assert.equal((await rpc('list_cleanup_attachments')).length,20);count++;});
+await q('delete from public.attachments where uploader_id=$1',[ids[2]]);
+
+// Independently upgrade the historical schema with previously recalled text/file/GIF/sticker rows.
+const upgrade=new PGlite();
+await upgrade.exec(await readFile(new URL('../supabase/tests/bootstrap.sql',import.meta.url),'utf8'));
+await upgrade.exec('create role service_role nologin bypassrls; grant usage on schema public to service_role');
+const migrationFiles=(await readdir(new URL('../supabase/migrations/',import.meta.url))).filter(f=>f.endsWith('.sql')).sort();
+for(const f of migrationFiles.filter(f=>f<'20261014000000_remediation.sql'))await upgrade.exec(await readFile(new URL('../supabase/migrations/'+f,import.meta.url),'utf8'));
+const uq=async(sql,args=[]) => (await upgrade.query(sql,args)).rows;
+const upgradeUsers=[randomUUID(),randomUUID()];
+for(const id of upgradeUsers)await uq("insert into auth.users(id,raw_user_meta_data) values($1,'{}')",[id]);
+await upgrade.exec('set role authenticated');
+await uq("select set_config('request.jwt.claim.sub',$1,false)",[upgradeUsers[0]]);
+const upgradeConversation=(await uq('select public.get_or_create_direct_conversation($1) value',[upgradeUsers[1]]))[0].value;
+const editedConversation=(await uq("select public.create_channel('Edited preview fixture','','General',false) value"))[0].value;
+await upgrade.exec('reset role');
+const legacyEdited=(await uq("insert into public.messages(conversation_id,sender_id,content,client_message_id) values($1,$2,'old preview',$3) returning *",[editedConversation,upgradeUsers[0],randomUUID()]))[0];
+await uq("update public.messages set content='already edited before upgrade',edited_at=clock_timestamp() where id=$1",[legacyEdited.id]);
+assert.equal((await uq('select last_message_preview from public.conversations where id=$1',[editedConversation]))[0].last_message_preview,'old preview');count++;
+const upgradeRows=[];
+for(const [kind,media] of [['text',null],['file',null],['gif',gif],['sticker',{kind:'sticker',id:'orb-v1-happy'}]]){
+ const row=(await uq("insert into public.messages(conversation_id,sender_id,content,client_message_id,message_type,media,deleted_at,created_at) values($1,$2,$3,$4,$5,$6,clock_timestamp(),clock_timestamp()) returning *",[upgradeConversation,upgradeUsers[0],'legacy '+kind+' original',randomUUID(),kind,media]))[0];upgradeRows.push(row);
+}
+const upgradeFile=upgradeRows.find(m=>m.message_type==='file');
+await uq("insert into public.attachments(id,message_id,conversation_id,uploader_id,storage_path,file_name,mime_type,file_size) values($1,$2,$3,$4,$5,'legacy-secret.pdf','application/pdf',20)",[randomUUID(),upgradeFile.id,upgradeConversation,upgradeUsers[0],'legacy/storage']);
+await uq("insert into storage.objects(bucket_id,name,metadata) values('chat-attachments','legacy/storage','{}')");
+await uq("insert into public.message_reactions(message_id,user_id,emoji) values($1,$2,'👍')",[upgradeFile.id,upgradeUsers[1]]);
+assert.equal((await uq('select last_message_preview from public.conversations where id=$1',[upgradeConversation]))[0].last_message_preview,'legacy sticker original');count++;
+await upgrade.exec(await readFile(new URL('../supabase/migrations/20261014000000_remediation.sql',import.meta.url),'utf8'));
+const repairedPreview=(await uq('select last_message_id,last_message_at,last_message_preview from public.conversations where id=$1',[editedConversation]))[0];
+assert.equal(repairedPreview.last_message_preview,'already edited before upgrade');assert.equal(repairedPreview.last_message_id,legacyEdited.id);assert.deepEqual(repairedPreview.last_message_at,legacyEdited.created_at);count++;
+for(const oldRow of upgradeRows){
+ const publicRow=(await uq('select * from public.messages where id=$1',[oldRow.id]))[0];
+ assert.equal(publicRow.content,'');assert.equal(publicRow.media,null);assert.equal(publicRow.message_type,'system');assert.equal(publicRow.id,oldRow.id);assert.deepEqual(publicRow.created_at,oldRow.created_at);count++;
+ const audit=(await uq('select original_payload from chat_private.message_audit where message_id=$1',[oldRow.id]))[0].original_payload;
+ assert.equal(audit.content,oldRow.content);assert.deepEqual(audit.media,oldRow.media);assert.equal(audit.message_type,oldRow.message_type);count++;
+}
+assert.equal((await uq('select last_message_preview from public.conversations where id=$1',[upgradeConversation]))[0].last_message_preview,'Message recalled');count++;
+await upgrade.exec('set role authenticated');
+await uq("select set_config('request.jwt.claim.sub',$1,false)",[upgradeUsers[1]]);
+assert.equal((await uq('select * from public.messages where conversation_id=$1',[upgradeConversation])).length,4);count++;
+assert.equal((await uq('select * from public.attachments')).length,0);count++;
+assert.equal((await uq('select * from public.message_reactions')).length,0);count++;
+assert.equal((await uq('select * from storage.objects')).length,0);count++;
+await denied(()=>uq('select * from chat_private.message_audit'));
+await upgrade.exec('reset role');
+await upgrade.close();
 console.log(`PASS: ${count} PostgreSQL/RLS assertions (PGlite). Storage HTTP validation and Realtime delivery are mocked and require Cloud integration tests.`);
 await db.close();
 

@@ -53,7 +53,7 @@ export function buildUpgradeResponse(acceptKey: string, protocol?: string): stri
  * Parses raw socket bytes into WebSocket frames.
  * Returns parsed frames and any incomplete buffer remainder.
  */
-export function parseFrames(buffer: Buffer): { frames: WebSocketFrame[]; remaining: Buffer } {
+export function parseFrames(buffer: Buffer, maxPayloadBytes = 10 * 1024 * 1024): { frames: WebSocketFrame[]; remaining: Buffer } {
   const frames: WebSocketFrame[] = [];
   let offset = 0;
 
@@ -75,13 +75,16 @@ export function parseFrames(buffer: Buffer): { frames: WebSocketFrame[]; remaini
     } else if (payloadLen === 127) {
       if (offset + 10 > buffer.length) break; // Need 8 more bytes for length
       const bigLen = buffer.readBigUInt64BE(offset + 2);
-      if (bigLen > BigInt(10 * 1024 * 1024)) {
-        throw new Error('Frame payload exceeds maximum safe length (10MB)');
+      if (bigLen > BigInt(maxPayloadBytes)) {
+        throw new Error('FRAME_TOO_LARGE');
       }
       payloadLen = Number(bigLen);
       headerLen += 8;
     }
 
+    if (payloadLen > maxPayloadBytes) throw new Error('FRAME_TOO_LARGE');
+    if ((firstByte & 0x70) !== 0 || ![0,1,2,8,9,10].includes(opcode)) throw new Error('Invalid frame header');
+    if (opcode >= 8 && (!fin || payloadLen > 125)) throw new Error('Invalid control frame');
     let maskKey: Buffer | null = null;
     if (masked) {
       if (offset + headerLen + 4 > buffer.length) break; // Need 4 bytes for mask key

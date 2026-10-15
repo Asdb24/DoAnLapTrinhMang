@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { serverClient } from '@/lib/supabase/server';
 import { requireSupabaseConfig } from '@/lib/supabase/config';
 import { appOrigin } from '@/lib/public-url.mjs';
+import { deleteAccountStorageAndIdentity, discardClaimedAttachment, handleAccountDeletion, handleAttachmentDiscard, type AccountDeletionDependencies } from '@/lib/account-deletion';
 
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -13,6 +14,46 @@ async function handler(request:Request,context:Context) {
   const path=(await context.params).path;
   if(request.method==='GET'&&path.join('/')==='health')return NextResponse.json({ok:true,backend:'supabase'});
   try{
+    const deletingAccount=request.method==='DELETE'&&path.join('/')==='account';
+    const discardingAttachment=request.method==='POST'&&path.length===3&&path[0]==='attachments'&&uuid.test(path[1])&&path[2]==='discard';
+    if(deletingAccount||discardingAttachment){
+      const dependencies: AccountDeletionDependencies = {
+        env: process.env,
+        hostedAvailable: Boolean(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY),
+        canonicalOrigin: () => appOrigin(new URL(request.url).origin),
+        async cookieIdentity(needToken) {
+          const client = await serverClient();
+          const {data:{user},error} = await client.auth.getUser();
+          if(error || !user || !(user.email_confirmed_at || user.phone_confirmed_at)) return null;
+          const session = needToken ? await client.auth.getSession() : null;
+          if(session?.error) return null;
+          return { id:user.id, accessToken:session?.data.session?.access_token,
+            async signOut() { const result=await client.auth.signOut({scope:'local'}); if(result.error) throw result.error; } };
+        },
+        async verifyBearer(token) {
+          const {url,key}=requireSupabaseConfig();
+          const client=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
+          const {data:{user},error}=await client.auth.getUser(token);
+          return error || !user || !(user.email_confirmed_at || user.phone_confirmed_at) ? null : {id:user.id};
+        },
+        async deleteIdentity(userId) {
+          const secret=process.env.SUPABASE_SECRET_KEY||process.env.SUPABASE_SERVICE_ROLE_KEY;
+          if(!secret) throw new Error('Account deletion unavailable');
+          const admin=createClient(requireSupabaseConfig().url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
+          await deleteAccountStorageAndIdentity(admin,userId);
+        },
+        async discardAttachment(attachmentId,userId,token) {
+          const {url,key}=requireSupabaseConfig();
+          const secret=process.env.SUPABASE_SECRET_KEY||process.env.SUPABASE_SERVICE_ROLE_KEY;
+          if(!secret) throw new Error('File cleanup unavailable');
+          const userClient=token ? createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false},global:{headers:{Authorization:`Bearer ${token}`}}}) : await serverClient();
+          const admin=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
+          await discardClaimedAttachment(userClient,admin,attachmentId,userId);
+        },
+        fetch,
+      };
+      return deletingAccount ? handleAccountDeletion(request,dependencies) : handleAttachmentDiscard(request,path[1],dependencies);
+    }
     const client=await serverClient();
     const {data:{user},error}=await client.auth.getUser();
     if(error||!user)return json('Sign in to continue.',401);
@@ -34,23 +75,6 @@ async function handler(request:Request,context:Context) {
       const inline=['image/png','image/jpeg','image/webp','image/gif'].includes(mime);
       const encoded=encodeURIComponent(name).replace(/['()]/g,char=>`%${char.charCodeAt(0).toString(16)}`);
       return new Response(result.data,{headers:{'Content-Type':mime,'Content-Disposition':`${inline?'inline':'attachment'}; filename*=UTF-8''${encoded}`,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}});
-    }
-    if(request.method==='DELETE'&&path.join('/')==='account'){
-      const origin=request.headers.get('origin');
-      if(!origin||origin!==appOrigin(new URL(request.url).origin))return json('Invalid request origin.',403);
-      const secret=process.env.SUPABASE_SECRET_KEY||process.env.SUPABASE_SERVICE_ROLE_KEY;
-      if(!secret)return json('Account deletion is not configured. Contact your workspace administrator.',503);
-      const admin=createClient(requireSupabaseConfig().url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
-      const attachments=await admin.from('attachments').select('storage_path').eq('uploader_id',user.id);
-      if(attachments.error)throw attachments.error;
-      const paths=(attachments.data||[]).map(row=>row.storage_path);
-      for(let i=0;i<paths.length;i+=100){const result=await admin.storage.from('chat-attachments').remove(paths.slice(i,i+100));if(result.error)throw result.error;}
-      // Always list from offset zero as each batch is removed.
-      for(;;){const result=await admin.storage.from('profile-avatars').list(user.id,{limit:100});if(result.error)throw result.error;if(!result.data.length)break;const removal=await admin.storage.from('profile-avatars').remove(result.data.map(file=>`${user.id}/${file.name}`));if(removal.error)throw removal.error;}
-      const result=await admin.auth.admin.deleteUser(user.id);
-      if(result.error)throw result.error;
-      await client.auth.signOut({scope:'local'});
-      return NextResponse.json({ok:true});
     }
     return json('Endpoint unavailable. ChatFlow now uses Supabase.',404);
   }catch{ return json('The service is unavailable. Please retry.',503); }

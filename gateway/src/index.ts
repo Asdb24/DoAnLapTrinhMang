@@ -3,15 +3,18 @@ import { ChatFlowGateway } from './server.js';
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
-const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET;
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const gateway = new ChatFlowGateway({
   port: PORT,
   uploadDir: UPLOAD_DIR,
   heartbeatIntervalMs: 25000,
-  supabaseJwtSecret: SUPABASE_JWT_SECRET,
   supabaseUrl: SUPABASE_URL,
-  authRequired: true,
+  supabasePublicKey: process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  downloadSecret: process.env.GATEWAY_DOWNLOAD_SECRET,
+  transferLimits: {
+    globalConcurrent: Number(process.env.GATEWAY_MAX_UPLOADS || 32),
+    globalBytes: Number(process.env.GATEWAY_STORAGE_BYTES || 10 * 1024 * 1024 * 1024),
+  },
   rateLimitMaxMessages: 10,
   rateLimitWindowMs: 5000,
   maxTextFrameBytes: 64 * 1024,

@@ -9,6 +9,12 @@ let serverProcess = null;
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const DEFAULT_PORT = 3100;
+const PUBLIC_RUNTIME_KEYS = new Set([
+  'NEXT_PUBLIC_APP_URL', 'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  'NEXT_PUBLIC_GATEWAY_URL', 'NEXT_PUBLIC_GIPHY_API_KEY',
+  'CHATFLOW_ACCOUNT_API_URL', 'CHATFLOW_ACCOUNT_API_ALLOWED_ORIGINS',
+]);
 
 function resolveServerPath() {
   const candidates = [
@@ -80,7 +86,14 @@ async function startProductionServer(port) {
     NODE_ENV: 'production',
     PORT: String(port),
     HOSTNAME: '127.0.0.1',
+    CHATFLOW_RUNTIME: 'electron',
+    CHATFLOW_DESKTOP_ORIGIN: `http://127.0.0.1:${port}`,
   };
+  // A desktop SSR process never needs privileged host credentials, even when
+  // Electron was started from an operator's shell.
+  for (const key of Object.keys(env)) {
+    if (/(SUPABASE_SECRET|SERVICE_ROLE|ADMIN.*(?:KEY|TOKEN)|SMTP|JWT|DOWNLOAD.*SIGN|PRIVATE_KEY|PASSWORD|ACCESS_TOKEN|DATABASE_URL)/i.test(key)) delete env[key];
+  }
 
   // Check for local .env files next to executable or app directory
   const envFiles = [
@@ -100,7 +113,7 @@ async function startProductionServer(port) {
           if (idx > 0) {
             const key = trimmed.slice(0, idx).trim();
             const val = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
-            if (!env[key]) env[key] = val;
+            if (PUBLIC_RUNTIME_KEYS.has(key) && !env[key]) env[key] = val;
           }
         }
       } catch (err) {
@@ -135,7 +148,8 @@ async function startProductionServer(port) {
 }
 
 async function loadApp() {
-  const port = process.env.PORT || (isDev ? 3000 : DEFAULT_PORT);
+  const port = Number(process.env.PORT || (isDev ? 3000 : DEFAULT_PORT));
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid local server port.');
   const appUrl = `http://127.0.0.1:${port}`;
 
   try {

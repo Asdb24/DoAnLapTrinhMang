@@ -1,3 +1,81 @@
+# Remediation verification — 2026-10-15
+
+Status: local implementation and automated verification completed for T01–T19. Cloud migration/deployment, staging browser acceptance and authenticated packaged-UI account deletion have not been executed. This section supersedes the historical Phase 1 claims below for the current worktree.
+
+## Fresh local results
+
+| Command | Result | What it proves |
+| --- | --- | --- |
+| npm run typecheck | PASS, exit 0 | Current application and gateway shared protocol types |
+| npm run lint | PASS, exit 0 | Repository lint alias runs TypeScript; this is not an ESLint audit |
+| npm test | PASS, 176 tests / 11 files | UI/services, ID reconciliation, auth/desktop routes, socket lifecycle/upload, configuration policy |
+| npm run test:db | PASS, 349 assertions | All eleven migrations in PGlite, RLS/grants/RPC, independent historical-schema upgrade |
+| npm --prefix gateway test | PASS, 29 tests | Real local TCP/WebSocket/HTTP, authorization failures, session expiry, files/quotas/private download |
+| Same compiled gateway suite on Ubuntu WSL / Node 22.13.0 | PASS, 29 tests, no skips | Native Linux filesystem, symlinks, exclusive writes, quotas, restart and full socket/HTTP cases |
+| npm run test:local | PASS, one two-session integration scenario | Two real frontend GatewayClient adapters over local TCP: committed send/edit/recall, upload/download bytes, revocation, refresh, disconnect |
+| npm run build | PASS, exit 0 | Next.js 16.3.6 optimized build, type compilation and standalone preparation |
+| npx electron-builder --win --dir --publish never | PASS, exit 0 | Windows unpacked package, including ChatFlow.exe and standalone resources |
+| npm run test:secrets | PASS, 4,228 artifacts | Browser, standalone, Windows distribution and ASAR scanned after packaging |
+| npm run test:package | PASS, exit 0 | Packaged Electron executable in Node mode serves health/login, keeps callback local, rejects foreign listener/Origin and unauthenticated mutations |
+| node --check on modified cloud/auth/attachment/package scripts | PASS | Syntax only; live scripts were not executed |
+| git diff --check | PASS | No whitespace errors in reviewed changes |
+
+The production build used the existing configured public origin; no test origin or secret was persisted. Packaging used --publish never. No source commit, push, cloud DDL, real-account test or release publication was performed.
+
+The Linux runtime archive matched the SHA256 in the official nodejs.org v22.13.0 manifest. Tests ran in an isolated native Linux /tmp directory. Initial WSL harness invocations discovered zero tests because the final PowerShell carriage return contaminated the glob; those runs were rejected as evidence. The final invocation verified the TAP count explicitly: 29 tests, 29 passes, zero failures/skips. CI now includes an Ubuntu gateway job required before the Windows build; the remote CI workflow itself was not triggered.
+
+## Finding and functional requirement evidence
+
+| Review item | Implemented control | Relevant regression evidence |
+| --- | --- | --- |
+| Async dispatch rejection | Validated packets, serialized bounded queue, caught rejection | gateway packet validation and peer-continuity tests |
+| Missing room authorizer | Mandatory production provider, user JWT/RLS on join/operation/delivery | authorizer and gateway e2e tests |
+| Upload path trust | Server UUID, exclusive files, directory/containment/symlink checks | file-transfers filesystem/collision tests |
+| Unbounded uploads | File/image/user/global/concurrency/idle/storage budgets, paced chunks | file-transfers quota/digest/restart tests |
+| NULL SQL authorship | Row lock, membership and IS DISTINCT FROM | PGlite orphan/wrong-author/former-member regressions |
+| Original content after recall | Private audit, atomic public redaction and live-parent child/Storage policy | Raw reads/grants/rollback, text/file/GIF/sticker upgrade fixtures |
+| Client message authority | DB author/room/client-request/state verification; ID-only notification; RLS hydration | message-authority, gateway-client, ChatFlow and two-session adapter tests |
+| Upload ownership | User/socket/room manifest and current membership | wrong-owner/wrong-session and room-negative transfer tests |
+| Public gateway download | Scoped expiring HMAC capability plus active session/membership recheck | HTTP bytes, anonymous/raw/expired/tampered/revoked download tests |
+| Session valid only at HELLO | Deadline, expiry, same-subject reauth and ACK-gated client | server lifecycle and frontend transport tests |
+| Anonymous presence | Valid authenticated recipients only | gateway presence privacy suite |
+| Blocked presence | Two-way DB projection/column grants and delivery-time gateway check | PGlite direct SELECT/RPC/embedding and presence/typing tests |
+| Stale preview | Latest-row edit/recall trigger plus recompute of all persisted latest previews | PGlite new/old edits, recalled latest, timestamp/cursor and historical edited-preview upgrade |
+| Desktop origin failure | Trusted loopback identity forwarding to configured hosted HTTPS; NextURL normalization guarded by exact original Host | Route unit tests and actual packaged-runtime smoke |
+| Misleading account deletion text | Explicit retention disclosure; failure remains retryable | Settings view tests and account cleanup failure tests |
+| Stranded departed drafts | Owner-only list/claim after leave, no byte-read grant, hosted exact-claim cleanup fallback | PGlite leave/quota/race tests; service/route tests; staged script extended |
+| Whole .env copy risk | Public configuration allowlist, inherited-secret filtering, static/standalone/package/ASAR gate | Fake credential/config fixtures, build and packaged scan |
+
+## Integration repairs found during verification
+
+The initial 50ms real-time upload-expiry fixture could expire during parallel test load. It now uses an injected clock; idle cleanup is checked independently of machine speed. No production timeout was weakened.
+
+A packaged runtime test reproduced a real 403 on legitimate loopback requests. Installed NextURL code normalizes 127.0.0.1 to localhost. Desktop guards now accept that representation only with the exact original 127.0.0.1:port Host and trusted Origin; foreign hosts/ports remain rejected. Confirmation/recovery redirects use the same verified listener and stay local. Raw HTTP tests verify Host handling; Node fetch does not send an arbitrary overridden Host here.
+
+An independent upgrade fixture exposed an old edited latest message retaining its stale preview. The migration now recomputes previews for every referenced latest row, preserving IDs and timestamps. The added regression first failed on the old migration and passed after the correction.
+
+Account cleanup now pages attachment metadata explicitly and deletes Storage bytes in batches. A 1,001-attachment regression first reproduced silent truncation at the default 1,000-row response cap, then passed with pagination. Cleanup errors still prevent identity deletion.
+
+## Scope and outstanding release verification
+
+- PGlite mocks managed Auth/Storage/Realtime infrastructure. Its 349 assertions do not establish cloud Storage HTTP or hosted Realtime behavior.
+- The two-adapter scenario runs real sockets and frontend transport code, with an in-memory committed-row provider. Frontend reconciliation is separately tested with component/service fixtures. Two authenticated browser sessions against the newly migrated staging backend remain a release check.
+- Packaged smoke runs ChatFlow.exe as Electron's Node runtime with a hidden child process. It verifies packaged server resources and real route behavior, not rendered BrowserWindow interaction, installer behavior, code-signing identity or successful deletion of a real user.
+- Cloud/auth/attachment scripts were extended for raw recalled file denial, presence masking, invalid bearer isolation, desktop callbacks and cleanup after leave. They need an explicitly selected staging target, hosted endpoint and isolated disposable accounts. No live result is claimed.
+- Operator must provide/verify the hosted account HTTPS origin and admin secret in its server secret store, migrate staging, configure gateway public-key authorization and coordinate protocol/schema/client rollout as documented in DEPLOYMENT.md.
+- Existing cloud migration history and running gateway version were not inspected during implementation. Previous historical evidence below is not current deployment evidence.
+- SMTP inbox delivery, gateway capacity/load, audit retention period, completed-file operational retention and packaged UI acceptance remain operator release concerns. No scheduled cleanup service was added.
+- Vitest emits the existing future Vite config-loader warning. Electron-builder reports missing author/description, default icon and duplicate dependency references; packaging succeeded. No valid signing certificate was established by these checks.
+
+## Current artifacts
+
+Migration: supabase/migrations/20261014000000_remediation.sql. Implementation checklist: tasks/todo.md. Plan and integration adjustments: tasks/plan.md. Release order: docs/DEPLOYMENT.md. Wire/data contract: docs/API.md. Windows smoke artifact: release/win-unpacked/ChatFlow.exe (ignored build output; not published).
+
+---
+
+# Historical Phase 1 evidence (not rerun for this remediation)
+
+
 # Phase 1 verification — 2026-09-24
 
 Status: implementation and automated checks verified; public deployment remains subject to the external configuration below.
