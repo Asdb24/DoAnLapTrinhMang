@@ -40,8 +40,14 @@ export async function discardAttachment(id:string) {
 export async function cleanAbandonedUploads(userId:string) {
   // Identity, age and staged state are enforced by the RPC even after channel membership ends.
   if (!userId) return;
-  const rows=check(await getSupabase().rpc('list_cleanup_attachments')) as unknown as AttachmentRow[];
-  for(const row of rows)await discardAttachment(row.id);
+  try {
+    const res = await getSupabase().rpc('list_cleanup_attachments');
+    if (res.error) return;
+    const rows = (res.data || []) as unknown as AttachmentRow[];
+    for(const row of rows) await discardAttachment(row.id);
+  } catch {
+    // Non-fatal background cleanup
+  }
 }
 export async function uploadAvatar(dataUrl:string,userId:string) {
   const blob=await (await fetch(dataUrl)).blob();

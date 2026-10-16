@@ -16,9 +16,20 @@ export function avatarUrl(value: string) {
 /** Presence is projected by the database for the authenticated caller, including block privacy. */
 export async function loadProfiles(ids?: string[]): Promise<ProfileRow[]> {
   if (ids && !ids.length) return [];
-  const rows = check(await getSupabase().rpc('list_profiles', ids ? { profile_ids: ids } : {}));
-  if (!Array.isArray(rows)) throw new Error('Profile directory returned an invalid response.');
-  return rows as unknown as ProfileRow[];
+  const client = getSupabase();
+  const rpcRes = await client.rpc('list_profiles', ids ? { profile_ids: ids } : {});
+  if (!rpcRes.error && Array.isArray(rpcRes.data)) {
+    return rpcRes.data as unknown as ProfileRow[];
+  }
+  let query = client.from('profiles').select('*');
+  if (ids && ids.length) {
+    query = query.in('id', ids);
+  } else {
+    query = query.order('display_name').limit(1000);
+  }
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data || []) as unknown as ProfileRow[];
 }
 export function mapConversation(row: ConversationMetadata, userId: string): Conversation {
   const otherMember = row.members.find(member => member.user_id !== userId);

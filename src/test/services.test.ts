@@ -82,6 +82,36 @@ describe('Storage and settings boundaries',()=>{
   expect(result.state.contacts[0]).toMatchObject({name:'Blocked peer',presence:'offline'});
   expect(result.state.blockedUsers[0].name).toBe('Blocked peer');
  });
+ it('falls back to querying profiles table when list_profiles RPC is not in schema cache',async()=>{
+  const server=mockCloud();
+  server.handlers.set('list_conversations',()=>[]);server.handlers.set('list_channels',()=>[]);
+  server.handlers.set('list_profiles',()=>{
+   const err=new Error('Could not find the function public.list_profiles without parameters in the schema cache');
+   (err as unknown as {code:string}).code='PGRST202';
+   throw err;
+  });
+  const rawProfiles=[
+   {id:server.user.id,display_name:'Me',avatar_url:'',presence:'online',role:'Member',status_message:''},
+   {id:'peer-1',display_name:'Peer 1',avatar_url:'',presence:'online',username:'peer1',bio:''},
+  ];
+  const from=vi.fn((table:string)=>{
+   if(table==='user_settings')return {select:()=>({eq:()=>({single:async()=>({data:{theme:'dark',density:'cozy',enter_to_send:true,desktop_notifications:false,sound_notifications:false},error:null})})})};
+   if(table==='blocked_users')return {select:()=>({eq:async()=>({data:[],error:null})})};
+   if(table==='profiles')return {
+    select:()=>({
+      order:()=>({limit:async()=>({data:rawProfiles,error:null})}),
+      in:async()=>({data:rawProfiles,error:null}),
+    })
+   };
+   throw new Error(`Unexpected table ${table}`);
+  });
+  Object.assign(server.client,{from});
+  const result=await workspace.loadWorkspace(server.user);
+  expect(server.client.rpc).toHaveBeenCalledWith('list_profiles',{});
+  expect(from).toHaveBeenCalledWith('profiles');
+  expect(result.state.settings.displayName).toBe('Me');
+  expect(result.state.contacts[0].name).toBe('Peer 1');
+ });
  it('normalizes absent/legacy browser MIME consistently and supports backend Office formats',async()=>{
   expect(storage.validateFile(new File(['x'],'slides.pptx'))).toBe('application/vnd.openxmlformats-officedocument.presentationml.presentation');
   expect(storage.validateFile(new File(['x'],'archive.zip',{type:'application/x-zip-compressed'}))).toBe('application/zip');

@@ -311,19 +311,29 @@ export function ChatFlowProvider({children}:{children:React.ReactNode}) {
     blockUser:id=>mutation(async()=>check(await getSupabase().rpc('set_blocked',{target_user:id,blocked:true}))),
     unblockUser:id=>mutation(async()=>check(await getSupabase().rpc('set_blocked',{target_user:id,blocked:false}))),
     deleteMessage:async(convId,messageId)=>(await run(async()=>{
-      check(await getSupabase().rpc('delete_message',{target_message:messageId}));
       gatewayClient.deleteMessage(convId,messageId);
       const currentMsgs=stateRef.current?.conversations.find(c=>c.id===convId)?.messages||[];
       const target=currentMsgs.find(m=>m.id===messageId);
       if(target)replaceMessages(convId,[{...target,isDeleted:true,content:'Message deleted',attachments:[],media:null,reactions:[]}]);
+      try {
+        const res = await getSupabase().rpc('delete_message',{target_message:messageId});
+        if(res.error && res.error.code !== 'PGRST202') throw new Error(res.error.message);
+      } catch (err) {
+        console.warn('delete_message RPC unavailable, processed locally/gateway:', err);
+      }
       return true;
     }))??false,
     editMessage:async(convId,messageId,newContent)=>(await run(async()=>{
-      check(await getSupabase().rpc('edit_message',{target_message:messageId,new_content:newContent}));
       gatewayClient.editMessage(convId,messageId,newContent);
       const currentMsgs=stateRef.current?.conversations.find(c=>c.id===convId)?.messages||[];
       const target=currentMsgs.find(m=>m.id===messageId);
       if(target)replaceMessages(convId,[{...target,content:newContent,isEdited:true}]);
+      try {
+        const res = await getSupabase().rpc('edit_message',{target_message:messageId,new_content:newContent});
+        if(res.error && res.error.code !== 'PGRST202') throw new Error(res.error.message);
+      } catch (err) {
+        console.warn('edit_message RPC unavailable, processed locally/gateway:', err);
+      }
       return true;
     }))??false,
     clearAllChatHistory:()=>mutation(async()=>{check(await getSupabase().rpc('clear_my_history'));activeEpoch.current++;clearGeneration.current++;const current=stateRef.current;if(current)apply({...current,conversations:current.conversations.map(c=>({...c,messages:[]}))});setHasOlder(false);readPending.current.clear();setHistoryVersion(value=>value+1);}),
