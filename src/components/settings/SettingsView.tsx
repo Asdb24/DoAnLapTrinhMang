@@ -56,10 +56,9 @@ type SettingsTab = "profile" | "customization" | "notifications" | "blocked" | "
 
 export interface SettingsViewProps {
   isModal?: boolean;
-  onClose?: () => void;
 }
 
-export function SettingsView({ isModal = false, onClose }: SettingsViewProps = {}) {
+export function SettingsView({ isModal = false }: SettingsViewProps = {}) {
   const {
     settings,
     updateSettings,

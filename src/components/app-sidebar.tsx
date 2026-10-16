@@ -353,7 +353,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             <span className="font-medium text-xs">
                               {conv.type === "group" ? `# ${conv.name}` : `@${conv.name.toLowerCase().replace(/\s+/g, "")}`}
                             </span>
-                            <span className="line-clamp-2 w-[260px] text-xs whitespace-break-spaces text-muted-foreground">
+                            <span className="line-clamp-2 w-[260px] text-xs whitespace-break-spaces break-words break-anywhere text-muted-foreground">
                               {conv.lastMessage || "No messages yet"}
                             </span>
                           </Link>

@@ -21,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="antialiased bg-background text-foreground h-screen w-screen overflow-hidden">
+      <body className="antialiased bg-background text-foreground h-screen w-full overflow-hidden">
         <MotionProvider>
           <ChatFlowProvider>
             <SidebarProvider
@@ -30,7 +30,7 @@ export default function RootLayout({
                 "--sidebar-width": "350px",
               } as React.CSSProperties
             }
-            className="h-screen w-screen overflow-hidden"
+            className="h-screen w-full overflow-hidden"
           >
             <AppSidebar />
             <SidebarInset className="flex flex-col h-screen overflow-hidden min-w-0">

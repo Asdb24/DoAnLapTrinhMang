@@ -1,5 +1,7 @@
 # Remediation verification — 2026-10-15
 
+Cleanup sau commit remediation được ghi riêng ở [tasks/cleanup.md](../tasks/cleanup.md), gồm lý do xóa/giữ từng nhóm và kết quả kiểm thử trên bản cleanup. Evidence remediation dưới đây được giữ nguyên phạm vi lịch sử.
+
 Status: local implementation and automated verification completed for T01–T19. Cloud migration/deployment, staging browser acceptance and authenticated packaged-UI account deletion have not been executed. This section supersedes the historical Phase 1 claims below for the current worktree.
 
 ## Fresh local results

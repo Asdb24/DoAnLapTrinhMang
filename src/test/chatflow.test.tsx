@@ -5,7 +5,7 @@ import type { User } from '@supabase/supabase-js';
 import { ChatFlowProvider,useChatFlow } from '@/context/ChatFlowContext';
 import { ChatRoom } from '@/components/chat/ChatRoom';
 import { api,ApiError } from '@/lib/api';
-import { deferred,fixture,message,mockCloud,json } from './setup';
+import { deferred,fixture,message,mockCloud } from './setup';
 
 type Notification={roomId:string;messageId:string;event:'created'|'edited'|'deleted';content?:string};
 const gateway=vi.hoisted(()=>({

@@ -1,9 +1,16 @@
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createHmac } from 'node:crypto';
 import { ChatFlowGateway } from '../dist/server.js';
 export const A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',C='cccccccc-cccc-4ccc-8ccc-cccccccccccc',ROOM='dddddddd-dddd-4ddd-8ddd-dddddddddddd',OTHER='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',MSG='ffffffff-ffff-4fff-8fff-ffffffffffff';
 export const pause=(ms=30)=>new Promise(r=>setTimeout(r,ms));
+// Synthetic JWTs belong only to provider tests; production authenticates through Supabase Auth.
+export function createTestJwt(payload,secret) {
+  const header=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');
+  const body=Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+3600,role:'authenticated',...payload})).toString('base64url');
+  return `${header}.${body}.${createHmac('sha256',secret).update(`${header}.${body}`).digest('base64url')}`;
+}
 export function provider() {
   const members=new Set([A,B]),messages=new Map(),blocked=new Set();
   return {members,messages,blocked,unavailable:false,

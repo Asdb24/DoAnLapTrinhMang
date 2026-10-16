@@ -1,7 +1,5 @@
 "use client"
 
-import * as React from "react"
-import Link from "next/link"
 import {
   ChevronsUpDown,
   LogOut,
@@ -33,7 +31,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { useChatFlow } from "@/context/ChatFlowContext"
-import { UserStatusIndicator } from "@/components/common/UserStatusIndicator"
 
 export function NavUser() {
   const { currentUser, settings, updateSettings, logout, pending, setSettingsDialogOpen } = useChatFlow()

@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { useChatFlow } from "@/context/ChatFlowContext";
 import { mediaUrl } from "@/lib/api";
 import { Conversation, SharedMediaItem } from "@/types";
@@ -15,10 +14,8 @@ import {
   ExternalLink,
   Image as ImageIcon,
   Link2,
-  Users,
   Bell,
   BellOff,
-  Search,
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react";

@@ -7,7 +7,8 @@ import { ChannelsView } from '@/components/channels/ChannelsView';
 import { CreateChannelDialog } from '@/components/channels/CreateChannelDialog';
 import { SettingsView } from '@/components/settings/SettingsView';
 import { NewMessageDialog } from '@/components/dialogs/NewMessageDialog';
-import { ChatListSidebar } from '@/components/chat/ChatListSidebar';
+import { AppSidebar } from '@/components/app-sidebar';
+import { SidebarProvider } from '@/components/ui/sidebar';
 import { MessageInputBar } from '@/components/chat/MessageInputBar';
 import { MessageItem } from '@/components/chat/MessageItem';
 import { MessageHistory } from '@/components/chat/MessageHistory';
@@ -17,7 +18,10 @@ import { deferred,mockCloud } from './setup';
 import ResetPasswordPage from '@/app/reset-password/page';
 const {push}=vi.hoisted(()=>({push:vi.fn()}));
 vi.mock('next/navigation',()=>({useRouter:()=>({push}),useParams:()=>({id:'c1'}),usePathname:()=>'/'}));
-beforeEach(()=>push.mockReset());
+beforeEach(()=>{
+ push.mockReset();
+ vi.stubGlobal('matchMedia',vi.fn((query:string)=>({matches:false,media:query,addEventListener(){},removeEventListener(){},addListener(){},removeListener(){}})));
+});
 async function mount(children:React.ReactNode){await act(async()=>{render(<ChatFlowProvider>{children}</ChatFlowProvider>);});}
 function OpenNewMessage(){const {setNewChatDialogOpen}=useChatFlow();return <><button onClick={()=>setNewChatDialogOpen(true)}>Open composer</button><NewMessageDialog/></>;}
 function LiveDetails(){const {conversations}=useChatFlow();return <ChatRightSidebar conversation={conversations[0]} onClose={()=>{}}/>;}
@@ -96,8 +100,13 @@ describe('Settings and conversation views',()=>{
  it('retains clear-history confirmation after failure and accurately describes its scope',async()=>{
   const server=mockCloud();server.handlers.set('clear_my_history',()=>{throw new Error('History unavailable');});await mount(<SettingsView/>);fireEvent.click(screen.getByRole('button',{name:/danger zone/i}));fireEvent.click(screen.getByRole('button',{name:/clear all chat history/i}));expect(screen.getByRole('dialog')).toHaveTextContent('Other participants retain their history');fireEvent.click(screen.getByRole('button',{name:'Confirm Clear'}));await waitFor(()=>expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent('History unavailable'));server.handlers.delete('clear_my_history');fireEvent.click(screen.getByRole('button',{name:'Confirm Clear'}));await waitFor(()=>expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
  });
- it('filters metadata by unread and groups without downloading message histories',async()=>{
-  const server=mockCloud(),user=userEvent.setup();await mount(<ChatListSidebar/>);await user.click(screen.getByRole('tab',{name:/unread/i}));expect(screen.getByText('Sarah Jenkins')).toBeInTheDocument();expect(screen.queryByText('Marcus Chen')).not.toBeInTheDocument();await user.click(screen.getByRole('tab',{name:/groups/i}));expect(screen.getByText('Engineering Core Team')).toBeInTheDocument();expect(screen.queryByText('Sarah Jenkins')).not.toBeInTheDocument();expect(server.messagePage).not.toHaveBeenCalled();
+ it('filters the production sidebar by unread, group, direct and search without downloading message histories',async()=>{
+  const server=mockCloud(),user=userEvent.setup();await mount(<SidebarProvider><AppSidebar/></SidebarProvider>);
+  await user.click(screen.getByRole('tab',{name:/unread/i}));expect(screen.getByText('Sarah Jenkins')).toBeInTheDocument();expect(screen.queryByText('Marcus Chen')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('tab',{name:/groups/i}));expect(screen.getByText('Engineering Core Team')).toBeInTheDocument();expect(screen.queryByText('Sarah Jenkins')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('tab',{name:/direct/i}));expect(screen.getByText('Marcus Chen')).toBeInTheDocument();expect(screen.queryByText('Engineering Core Team')).not.toBeInTheDocument();
+  await user.type(screen.getByRole('textbox',{name:'Search conversations, channels or contacts'}),'Marcus');expect(screen.getByText('Marcus Chen')).toBeInTheDocument();expect(screen.queryByText('Sarah Jenkins')).not.toBeInTheDocument();
+  expect(server.messagePage).not.toHaveBeenCalled();
  });
  it('preserves page order even when date section labels repeat',async()=>{
   const server=mockCloud(),conversation=server.state.conversations[0];conversation.messages=['Today','Today','Yesterday','Today'].map((date,index)=>({id:'ordered-'+index,senderId:'user-me',senderName:'Alex',isSentByMe:true,content:'Ordered message '+index,timestamp:'12:00',date}));await mount(<MessageHistory conversation={conversation}/>);expect(screen.getAllByText(/^Ordered message/).map(e=>e.textContent)).toEqual(['Ordered message 0','Ordered message 1','Ordered message 2','Ordered message 3']);expect(screen.getAllByText(/^(Today|Yesterday)$/).map(e=>e.textContent)).toEqual(['Today','Yesterday','Today']);
@@ -107,6 +116,17 @@ describe('Settings and conversation views',()=>{
  });
  it('awaits mute persistence and displays authenticated attachment proxy URLs',async()=>{
   const server=mockCloud(),pending=deferred<null>();server.handlers.set('set_conversation_muted',()=>pending.promise);const m=server.state.conversations[0].messages[0];m.attachments=[{id:'file-id',name:'report.pdf',size:'1 KB',type:'pdf',url:'/api/attachments/file-id'}];await mount(<><LiveDetails/><MessageItem message={m} conversationId="c1"/></>);expect(screen.getByRole('link',{name:'Download report.pdf'})).toHaveAttribute('href','/api/attachments/file-id');fireEvent.click(screen.getByRole('button',{name:'Mute'}));expect(screen.getByRole('button',{name:'Mute'})).toBeDisabled();server.state.conversations[0].isMuted=true;await act(async()=>pending.resolve(null));expect(screen.getByRole('button',{name:'Muted'})).toHaveAttribute('aria-pressed','true');
+ });
+ it('wraps long unbroken strings and constrains bubble row to prevent horizontal layout overflow',async()=>{
+  mockCloud();
+  const longString='1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 5090 cua tui dau roi';
+  const msg={id:'long-1',senderId:'user-alice',senderName:'Alice',isSentByMe:false,content:longString,timestamp:'09:40',date:'Today'};
+  await mount(<MessageItem message={msg} conversationId="c1"/>);
+  const p=screen.getByText((content)=>content.includes('5090 cua tui dau roi'));
+  expect(p).toHaveClass('break-words');
+  expect(p).toHaveClass('break-anywhere');
+  expect(p.closest('.group\\/bubble-row')).toHaveClass('max-w-full');
+  expect(p.closest('.group\\/bubble-row')).toHaveClass('min-w-0');
  });
 });
 

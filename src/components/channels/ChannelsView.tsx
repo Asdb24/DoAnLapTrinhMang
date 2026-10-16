@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation";
 import type { Channel } from "@/types";
 import { InviteMemberDialog } from "./InviteMemberDialog";
 import { useChatFlow } from "@/context/ChatFlowContext";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { UserStatusBadge } from "@/components/common/UserStatusIndicator";
 import {
   Select,
   SelectContent,
@@ -36,7 +35,7 @@ import { FluidHoverHighlight } from "@/components/fluid-hover-highlight";
 import { GhostSpan } from "@/lib/font-weight";
 
 export function ChannelsView() {
-  const { channels, toggleJoinChannel, openChannelChat, settings, pending } = useChatFlow();
+  const { channels, toggleJoinChannel, openChannelChat, pending } = useChatFlow();
   const [inviteChannel, setInviteChannel] = useState<Channel | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");

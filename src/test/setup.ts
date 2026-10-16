@@ -37,7 +37,6 @@ beforeEach(()=>{
 });
 afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();vi.restoreAllMocks();bridge.current=null;});
 export function fixture():ApiState{return JSON.parse(JSON.stringify({conversations:fixtureConversations,channels:fixtureChannels,contacts:fixtureContacts,settings:fixtureSettings,blockedUsers:fixtureBlockedUsers,currentUser:{id:'user-me',email:fixtureSettings.email},migrationCompleted:true}));}
-export function json(value:unknown,status=200){return new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});}
 export function deferred<T>(){let resolve!:(value:T)=>void;let reject!:(reason?:unknown)=>void;const promise=new Promise<T>((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
 export type ConversationHandlers={message:(id:string,deleted:boolean)=>void;reconcile:()=>void;status:(value:string)=>void};
 type RpcArgs=Record<string,unknown>;

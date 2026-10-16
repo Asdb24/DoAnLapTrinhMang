@@ -47,7 +47,7 @@ function MessageContent({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="message-content"
       className={cn(
-        "flex w-full min-w-0 flex-col gap-1.5 break-words group-data-[align=end]/message:items-end group-data-[align=end]/message:[&>*]:self-end",
+        "flex w-full min-w-0 flex-col gap-1.5 break-words break-anywhere group-data-[align=end]/message:items-end group-data-[align=end]/message:[&>*]:self-end",
         className
       )}
       {...props}

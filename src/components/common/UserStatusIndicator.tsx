@@ -1,4 +1,3 @@
-import React from "react";
 import { PresenceStatus } from "@/types";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";

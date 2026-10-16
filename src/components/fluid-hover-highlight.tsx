@@ -1,7 +1,6 @@
 "use client";
 
-import React from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { spring } from "@/lib/springs";
 import { FluidHoverReturn } from "@/hooks/use-fluid-hover";
 import { cn } from "@/lib/utils";

@@ -21,7 +21,7 @@ flowchart LR
   API --> ADMIN[Hosted admin cleanup]
 ```
 
-Gateway production gọi Auth xác minh token rồi đối chiếu subject/expiry; request database dùng JWT người dùng và public project key. Shared HS256 helper chỉ còn phục vụ test. Production thiếu provider sẽ không khởi động.
+Gateway production gọi Auth xác minh token rồi đối chiếu subject/expiry; request database dùng JWT người dùng và public project key. JWT mẫu chỉ được tạo trong gateway/test/helpers.mjs; verifier HS256 cũ đã được bỏ khỏi production. Production thiếu provider sẽ không khởi động.
 
 ## Gửi, sửa, thu hồi
 

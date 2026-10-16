@@ -117,10 +117,24 @@
   }
   body {
     @apply bg-background text-foreground;
+    overflow-x: hidden;
   }
 }
 
 @layer utilities {
+  /* Prevent unbroken text strings from blowing up flex and table containers */
+  .break-anywhere {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  /* Fix Radix ScrollArea display:table causing width blowup with long unbroken text or flex children */
+  [data-radix-scroll-area-viewport] > div {
+    display: block !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
   /* Completely hide native scrollbars on all browsers while preserving scrolling */
   .no-scrollbar::-webkit-scrollbar {
     display: none !important;

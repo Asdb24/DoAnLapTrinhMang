@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useChatFlow } from "@/context/ChatFlowContext";
 import { ChatHeader } from "./ChatHeader";
 import { MessageHistory } from "./MessageHistory";
@@ -44,8 +44,8 @@ export function ChatRoom({ id }: { id: string }) {
   }
 
   return (
-    <div className="flex-1 flex h-full overflow-hidden bg-background">
-      <div className="flex-1 flex flex-col min-w-0 h-full">
+    <div className="flex-1 flex h-full min-w-0 overflow-hidden bg-background">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         <ChatHeader
           conversation={conversation}
           showDetails={showDetails}

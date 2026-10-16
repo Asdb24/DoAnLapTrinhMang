@@ -14,8 +14,14 @@ test('verified subject binds identity; same-subject reauth extends expiry, diffe
   c.send({type:'HELLO',version:'2.0',userId:B,displayName:'user',token:B});assert.equal((await c.wait('ERROR')).code,'AUTH_FAILED');await pause();assert.equal(c.closed,true);
 });
 test('expiry removes room rights even when heartbeats continue',async t=>{
-  const auth=provider();auth.authenticate=async token=>({userId:token,expiresAt:Date.now()+100});
-  const f=await fixture(t,{authorizer:auth}),c=await f.client(A);await c.join();c.send({type:'PING'});await c.wait('PONG');await pause(150);assert.equal(c.closed,true);
+  // Keep credentials valid during setup regardless of CPU load, then advance
+  // logical time. Production's expiry timer must still close the live socket.
+  let now=Date.now();
+  const auth=provider();auth.authenticate=async token=>({userId:token,expiresAt:now+100});
+  const f=await fixture(t,{authorizer:auth,now:()=>now}),c=await f.client(A);await c.join();c.send({type:'PING'});await c.wait('PONG');
+  now+=101;
+  const deadline=Date.now()+2000;while(!c.closed&&Date.now()<deadline)await pause(5);
+  assert.equal(c.closed,true);
 });
 test('bounded provider deadline and packet queue prevent a hung peer from blocking healthy sockets',async t=>{
   const auth=provider();const authenticate=auth.authenticate.bind(auth);auth.authenticate=token=>token===B?new Promise(()=>{}):authenticate(token);

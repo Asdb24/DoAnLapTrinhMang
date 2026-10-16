@@ -3,14 +3,13 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useChatFlow } from "@/context/ChatFlowContext";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UserStatusIndicator, UserStatusBadge } from "@/components/common/UserStatusIndicator";
-import { Search, MessageSquare, Mail, UserPlus, Users, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Search, MessageSquare, Mail, UserPlus, ShieldAlert, ShieldCheck } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useFluidHover } from "@/hooks/use-fluid-hover";
 import { FluidHoverHighlight } from "@/components/fluid-hover-highlight";

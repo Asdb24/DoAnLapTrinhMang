@@ -71,7 +71,7 @@ function BubbleContent({
     <Comp
       data-slot="bubble-content"
       className={cn(
-        "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-transparent px-4 py-2.5 text-sm leading-relaxed break-words group-data-[align=end]/bubble:self-end",
+        "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-transparent px-4 py-2.5 text-sm leading-relaxed break-words break-anywhere group-data-[align=end]/bubble:self-end",
         className
       )}
       {...props}

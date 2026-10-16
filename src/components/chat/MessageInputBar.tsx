@@ -146,7 +146,7 @@ export function MessageInputBar({
           </div>
         )}
 
-        <div className="relative flex flex-wrap sm:flex-nowrap items-end gap-2 border rounded-xl bg-background p-1.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 transition-all">
+        <div className="relative flex flex-wrap sm:flex-nowrap items-end gap-2 border rounded-xl bg-background p-1.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 transition-all max-w-full min-w-0">
           <input
             id="chat-file-input"
             name="file"
@@ -188,7 +188,7 @@ export function MessageInputBar({
             onSelect={event=>{selection.current={start:event.currentTarget.selectionStart,end:event.currentTarget.selectionEnd};}}
             onKeyDown={handleKeyDown}
             placeholder={`Message ${recipientName}...`}
-            className="order-first basis-full min-w-0 sm:order-none sm:basis-auto min-h-[38px] max-h-32 border-0 bg-transparent resize-none p-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground shadow-none"
+            className="order-first basis-full min-w-0 sm:order-none sm:flex-1 sm:basis-auto min-h-[38px] max-h-32 border-0 bg-transparent resize-none p-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground shadow-none"
             rows={1}
           />
 

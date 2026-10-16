@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { MessageType } from "@/types";
 import { useChatFlow } from "@/context/ChatFlowContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -110,7 +110,7 @@ export function MessageItem({
           </MessageHeader>
         )}
 
-        <div className="relative flex items-center gap-1.5 group/bubble-row">
+        <div className="relative flex items-center gap-1.5 group/bubble-row max-w-full min-w-0">
           {isSent && !isDeleted && (
             <div
               className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 self-center order-first"
@@ -205,7 +205,7 @@ export function MessageItem({
               )}
             >
               {isDeleted ? (
-                <p className="italic text-muted-foreground leading-relaxed text-xs">
+                <p className="italic text-muted-foreground leading-relaxed text-xs break-words break-anywhere">
                   Tin nhắn đã bị thu hồi
                 </p>
               ) : isEditing ? (
@@ -214,7 +214,7 @@ export function MessageItem({
                     id="edit-message-textarea"
                     name="editDraft"
                     aria-label="Chỉnh sửa nội dung tin nhắn"
-                    className="w-full text-xs sm:text-sm bg-background text-foreground border rounded p-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full text-xs sm:text-sm bg-background text-foreground border rounded p-2 resize-none focus:outline-none focus:ring-1 focus:ring-primary break-words break-anywhere"
                     value={editDraft}
                     onChange={(e) => setEditDraft(e.target.value)}
                     onKeyDown={(e) => {
@@ -256,7 +256,7 @@ export function MessageItem({
               ) : (
                 <>
                   {Boolean(message.content?.trim()) && (
-                    <p className="whitespace-pre-wrap break-words leading-relaxed">
+                    <p className="whitespace-pre-wrap break-words break-anywhere leading-relaxed">
                       {message.content}
                     </p>
                   )}

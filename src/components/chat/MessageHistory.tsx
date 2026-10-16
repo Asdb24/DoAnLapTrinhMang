@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { Conversation, MessageType } from "@/types";
 import { MessageItem } from "./MessageItem";
 import { MessageGroup } from "@/components/ui/message";
@@ -58,7 +58,8 @@ export function MessageHistory({ conversation }: MessageHistoryProps) {
   }
 
   return (
-    <div ref={wrapperRef} className="flex-1 min-h-0"><ScrollArea className="h-full p-4 sm:p-6">
+    <div ref={wrapperRef} className="flex-1 min-h-0 min-w-0 overflow-hidden">
+      <ScrollArea className="h-full w-full p-4 sm:p-6">
       <div className="space-y-4">
         {hasOlder && <div className="text-center"><Button variant="outline" size="sm" disabled={loadingMessages} onClick={older}>Load older messages</Button></div>}
         {conversation.messages.length === 0 ? (

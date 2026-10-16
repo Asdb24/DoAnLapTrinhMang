@@ -1,17 +1,12 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { Socket } from 'node:net';
-import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { buildUpgradeResponse,computeAcceptKey,parseFrames,encodeFrame,encodeCloseFrame,Opcode,type WebSocketFrame } from './websocket-codec.js';
 import { PROTOCOL_VERSION,type ClientPacket,type GatewayPacket,type HelloPacket,type ChangeEvent } from './protocol.js';
 import { validateClientPacket,UUID } from './packet-validation.js';
 import { SupabaseAuthorizer,type GatewayAuthorizer,type AuthorizedSession } from './supabase-authorizer.js';
 import { FileTransfers,type TransferLimits } from './file-transfers.js';
 
-export interface JwtPayload { sub:string; exp:number; [key:string]:unknown }
-export function verifyHs256Jwt(token:string,secret:string):JwtPayload|null {
-  try {const [head,body,sig,...extra]=token.split('.');if(extra.length||JSON.parse(Buffer.from(head,'base64url').toString()).alg!=='HS256')return null;const expected=createHmac('sha256',secret).update(`${head}.${body}`).digest();const actual=Buffer.from(sig,'base64url');if(actual.length!==expected.length||!timingSafeEqual(actual,expected))return null;const p=JSON.parse(Buffer.from(body,'base64url').toString());return typeof p.sub==='string'&&Number.isSafeInteger(p.exp)&&p.exp*1000>Date.now()?p:null;}catch{return null;}
-}
-export function createTestJwt(payload:{sub:string;exp?:number;[key:string]:unknown},secret:string):string {const header=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url');const body=Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+3600,role:'authenticated',...payload})).toString('base64url');return `${header}.${body}.${createHmac('sha256',secret).update(`${header}.${body}`).digest('base64url')}`;}
 export interface GatewayOptions {
   port:number; uploadDir:string; authorizer?:GatewayAuthorizer; supabaseUrl?:string; supabasePublicKey?:string;
   heartbeatIntervalMs?:number; helloTimeoutMs?:number; authorizationTimeoutMs?:number; maxAuthConcurrent?:number;

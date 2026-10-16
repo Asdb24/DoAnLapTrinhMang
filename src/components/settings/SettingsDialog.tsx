@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { useChatFlow } from "@/context/ChatFlowContext";
 import {
   Dialog,
@@ -35,7 +34,7 @@ export function SettingsDialog() {
         </DialogHeader>
 
         <div className="flex-1 flex min-h-0 overflow-hidden">
-          <SettingsView isModal={true} onClose={() => setSettingsDialogOpen(false)} />
+          <SettingsView isModal={true} />
         </div>
       </DialogContent>
     </Dialog>

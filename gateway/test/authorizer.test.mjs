@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SupabaseAuthorizer } from '../dist/supabase-authorizer.js';
-import { createTestJwt } from '../dist/server.js';
-import { A,ROOM,MSG } from './helpers.mjs';
+import { createTestJwt,A,ROOM,MSG } from './helpers.mjs';
 test('provider uses explicit public key plus caller bearer for Auth/RLS/RPC; never service role',async()=>{
   const token=createTestJwt({sub:A},'fixture'),requests=[];
   const fetcher=async(url,options)=>{requests.push({url,options});let value;if(url.endsWith('/auth/v1/user'))value={id:A};else if(url.includes('conversation_members'))value=[{user_id:A}];else if(url.includes('/messages?'))value=[{id:MSG}];else value=true;return new Response(JSON.stringify(value),{status:200});};
